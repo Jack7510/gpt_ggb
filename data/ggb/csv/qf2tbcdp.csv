@@ -1,0 +1,137 @@
+ggbscript,prompt
+"绘图区尺寸 = Corner[5]
+ShowLabel[绘图区尺寸, true]
+SetVisibleInView[绘图区尺寸, 1, false]
+SetColor[绘图区尺寸, ""#444444""]
+SetLabelMode[绘图区尺寸, 0]
+SetPointSize[绘图区尺寸, 4]
+",
+"课件标题 = FormulaText[""图形的运动（二）""]
+ShowLabel[课件标题, true]
+SetVisibleInView[课件标题, 1, true]
+SetLayer[课件标题, 9]
+SetLabelMode[课件标题, 0]
+",
+"x轴_{1} = Vector[(x(Corner[1]), 0),((x(Corner[2]) * 127 / 128) + x(Corner[1]) / 128, 0)]
+ShowLabel[x轴_{1}, false]
+SetVisibleInView[x轴_{1}, 1, false]
+SetLabelMode[x轴_{1}, 0]
+",
+"y轴_{1} = Vector[(0, y(Corner[1])),(0, (y(Corner[4]) * 64 / 72) + (y(Corner[1]) * 7 / 72))]
+ShowLabel[y轴_{1}, false]
+SetVisibleInView[y轴_{1}, 1, false]
+SetLabelMode[y轴_{1}, 0]
+",
+"text1 = FormulaText[""x""]
+ShowLabel[text1, true]
+SetVisibleInView[text1, 1, false]
+SetLayer[text1, 2]
+SetLabelMode[text1, 0]
+",
+"text2 = FormulaText[""y""]
+ShowLabel[text2, true]
+SetVisibleInView[text2, 1, false]
+SetLayer[text2, 2]
+SetLabelMode[text2, 0]
+",
+"D3绘图区尺寸 = (x(Corner[6]) - x(Corner[5]), y(Corner[5]))
+ShowLabel[D3绘图区尺寸, true]
+SetVisibleInView[D3绘图区尺寸, 1, true]
+SetColor[D3绘图区尺寸, ""#404040""]
+SetLayer[D3绘图区尺寸, 8]
+SetLabelMode[D3绘图区尺寸, 0]
+SetPointSize[D3绘图区尺寸, 3]
+",
+"A = (1, 0, 0)
+ShowLabel[A, true]
+SetVisibleInView[A, -1, false]
+SetColor[A, ""#404040""]
+SetLayer[A, 8]
+SetLabelMode[A, 0]
+",
+"f = Line[A,yAxis]
+ShowLabel[f, false]
+SetVisibleInView[f, -1, false]
+SetLayer[f, 8]
+SetLabelMode[f, 0]
+",
+"B = Point[f]
+ShowLabel[B, false]
+SetVisibleInView[B, -1, true]
+SetColor[B, ""#ff0000""]
+SetLayer[B, 8]
+SetLabelMode[B, 0]
+SetPointSize[B, 4]
+SetCoords[B, 1, 0, 0]
+",
+"g = Segment[(1, (-y(B)), 5),B]
+ShowLabel[g, false]
+SetVisibleInView[g, -1, true]
+SetColor[g, ""#00ff00""]
+SetLayer[g, 8]
+SetLabelMode[g, 0]
+",
+"α = Slider[0, 6.283185307179586, 0.017453292519943295, 1, 180, true, true, false]
+SetValue[α, 0]
+SetLineThickness[α, 10]
+ShowLabel[α, true]
+SetVisibleInView[α, 1, true]
+SetFilling[α, 0.10000000149011612]
+SetLayer[α, 8]
+SetLabelMode[α, 1]
+",
+"a = Surface[g,α,zAxis]
+ShowLabel[a, false]
+SetVisibleInView[a, -1, true]
+SetColor[a, ""#00ff00""]
+SetFilling[a, 0.75]
+SetLayer[a, 8]
+SetLabelMode[a, 0]
+SetLineThickness[a, 1]
+",
+"g' = Rotate[g,α,zAxis]
+ShowLabel[g', false]
+SetVisibleInView[g', -1, true]
+SetColor[g', ""#00ff00""]
+SetLayer[g', 8]
+SetLabelMode[g', 0]
+",
+"o = true
+ShowLabel[o, true]
+SetVisibleInView[o, 1, false]
+SetLabelMode[o, 0]
+",
+"button1 = Button[""旋转""]
+ShowLabel[button1, true]
+SetVisibleInView[button1, 1, true]
+SetLayer[button1, 8]
+SetLabelMode[button1, 3]
+SetCaption[button1, ""旋转""]
+",
+"button2 = Button[""圆柱面""]
+ShowLabel[button2, true]
+SetVisibleInView[button2, 1, true]
+SetLayer[button2, 8]
+SetLabelMode[button2, 0]
+SetCaption[button2, ""圆柱面""]
+",
+"text3 = FormulaText[""\ovalbox{操作说明：\\拖动红色点可以\\改变曲面形状。}""]
+ShowLabel[text3, true]
+SetVisibleInView[text3, 1, true]
+SetLayer[text3, 8]
+SetLabelMode[text3, 0]
+",
+"C = (0.065, -5.3)
+ShowLabel[C, false]
+SetVisibleInView[C, 1, false]
+SetColor[C, ""#404040""]
+SetLayer[C, 8]
+SetLabelMode[C, 0]
+",
+"D = (5.04, -5.28)
+ShowLabel[D, false]
+SetVisibleInView[D, 1, false]
+SetColor[D, ""#404040""]
+SetLayer[D, 8]
+SetLabelMode[D, 0]
+",

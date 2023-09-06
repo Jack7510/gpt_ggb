@@ -1,0 +1,66 @@
+ggbscript,prompt
+"A = (-1, 0)
+ShowLabel[A, true]
+SetVisibleInView[A, 1, true]
+SetColor[A, ""#0000ff""]
+SetLabelMode[A, 0]
+SetPointSize[A, 3]
+",
+"B = (1, 0)
+ShowLabel[B, true]
+SetVisibleInView[B, 1, true]
+SetColor[B, ""#0000ff""]
+SetLabelMode[B, 0]
+SetPointSize[B, 3]
+",
+"c = Slider[-5, 5, 0.1, 2, 100, true, true, true]
+SetValue[c, -4.8]
+SetLineThickness[c, 2]
+ShowLabel[c, true]
+SetVisibleInView[c, 1, true]
+SetFilling[c, 0.1]
+SetLabelMode[c, 1]
+",
+"X = (x(A), c)
+ShowLabel[X, true]
+SetVisibleInView[X, 1, true]
+SetColor[X, ""#444444""]
+SetLabelMode[X, 0]
+SetPointSize[X, 3]
+",
+"Y = (x(B), (2 * c^(2)))
+ShowLabel[Y, true]
+SetVisibleInView[Y, 1, true]
+SetColor[Y, ""#0000ff""]
+SetLabelMode[Y, 0]
+SetPointSize[Y, 3]
+",
+"text1 = Text[""x="" + c + """"]
+ShowLabel[text1, false]
+SetVisibleInView[text1, 1, true]
+SetLabelMode[text1, 0]
+",
+"d = Segment[X,Y]
+ShowLabel[d, false]
+SetVisibleInView[d, 1, true]
+SetColor[d, ""#ff33cc""]
+SetLabelMode[d, 0]
+SetLineThickness[d, 2]
+",
+"a : 1 x + 0 y + 1 = 0
+ShowLabel[a, false]
+SetVisibleInView[a, 1, true]
+SetLabelMode[a, 0]
+SetLineThickness[a, 2]
+",
+"b : 1 x + 0 y + -1 = 0
+ShowLabel[b, false]
+SetVisibleInView[b, 1, true]
+SetLabelMode[b, 0]
+SetLineThickness[b, 2]
+",
+"text2 = Text[""y="" + (y(Y)) + """"]
+ShowLabel[text2, false]
+SetVisibleInView[text2, 1, true]
+SetLabelMode[text2, 0]
+",

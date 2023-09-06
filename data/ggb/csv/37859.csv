@@ -1,0 +1,81 @@
+ggbscript,prompt
+"A = (-1, 5)
+ShowLabel[A, true]
+SetVisibleInView[A, 1, true]
+SetColor[A, ""#0000ff""]
+SetLabelMode[A, 0]
+SetPointSize[A, 3]
+",
+"B = (-3, 3)
+ShowLabel[B, true]
+SetVisibleInView[B, 1, true]
+SetColor[B, ""#0000ff""]
+SetLabelMode[B, 0]
+SetPointSize[B, 3]
+",
+"C = (1, -1)
+ShowLabel[C, true]
+SetVisibleInView[C, 1, true]
+SetColor[C, ""#0000ff""]
+SetLabelMode[C, 0]
+SetPointSize[C, 3]
+",
+"D = (2, -2)
+ShowLabel[D, true]
+SetVisibleInView[D, 1, true]
+SetColor[D, ""#0000ff""]
+SetLabelMode[D, 0]
+SetPointSize[D, 3]
+",
+"E = (4, 0)
+ShowLabel[E, true]
+SetVisibleInView[E, 1, true]
+SetColor[E, ""#0000ff""]
+SetLabelMode[E, 0]
+SetPointSize[E, 3]
+",
+"poly1 = Polygon[A,B,D,E]
+SetLineThickness[poly1, 2]
+ShowLabel[poly1, false]
+SetVisibleInView[poly1, 1, true]
+SetColor[poly1, ""#993300""]
+SetFilling[poly1, 0.1]
+SetLabelMode[poly1, 0]
+",
+"F = (6, 5)
+ShowLabel[F, true]
+SetVisibleInView[F, 1, true]
+SetColor[F, ""#0000ff""]
+SetLabelMode[F, 0]
+SetPointSize[F, 3]
+",
+"G = Point[xAxis]
+ShowLabel[G, true]
+SetVisibleInView[G, 1, true]
+SetColor[G, ""#7d7dff""]
+SetLabelMode[G, 0]
+SetPointSize[G, 3]
+SetCoords[G, 6, 0]
+",
+"H = (9, 0)
+ShowLabel[H, true]
+SetVisibleInView[H, 1, true]
+SetColor[H, ""#0000ff""]
+SetLabelMode[H, 0]
+SetPointSize[H, 3]
+",
+"I = (9, 5)
+ShowLabel[I, true]
+SetVisibleInView[I, 1, true]
+SetColor[I, ""#0000ff""]
+SetLabelMode[I, 0]
+SetPointSize[I, 3]
+",
+"poly2 = Polygon[F,G,H,I]
+SetLineThickness[poly2, 2]
+ShowLabel[poly2, false]
+SetVisibleInView[poly2, 1, true]
+SetColor[poly2, ""#993300""]
+SetFilling[poly2, 0.1]
+SetLabelMode[poly2, 0]
+",

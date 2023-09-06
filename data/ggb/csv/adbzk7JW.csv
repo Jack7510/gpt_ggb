@@ -1,0 +1,19 @@
+ggbscript,prompt
+"A = (3.1514945162440484, 5.979275161568061)
+ShowLabel[A, true]
+SetVisibleInView[A, 1, true]
+SetColor[A, ""#4d4dff""]
+SetLabelMode[A, 0]
+",
+"B = (10.51456500630486, 11.184204301093807)
+ShowLabel[B, true]
+SetVisibleInView[B, 1, true]
+SetColor[B, ""#4d4dff""]
+SetLabelMode[B, 0]
+",
+"f(x) = y(A) + ((y(B) - y(A)) / (x(B) - x(A)) * (x - x(A)))
+ShowLabel[f, true]
+SetVisibleInView[f, 1, true]
+SetColor[f, ""#006400""]
+SetLabelMode[f, 0]
+",

@@ -1,0 +1,1036 @@
+ggbscript,prompt
+"G = (9.6, 6)
+ShowLabel[G, false]
+SetVisibleInView[G, 1, true]
+SetColor[G, ""#0000ff""]
+SetLabelMode[G, 0]
+SetPointSize[G, 3]
+",
+"M = (x(G), 3)
+ShowLabel[M, false]
+SetVisibleInView[M, 1, true]
+SetColor[M, ""#404040""]
+SetLabelMode[M, 0]
+SetPointSize[M, 3]
+",
+"r = Slider[0, 2.8, 0.1, 1, 100, false, true, false]
+SetValue[r, 2.5]
+SetLineThickness[r, 2]
+ShowLabel[r, true]
+SetVisibleInView[r, 1, false]
+SetFilling[r, 0.1]
+SetLabelMode[r, 1]
+",
+"M_2 = (x(G), y(M) - r)
+ShowLabel[M_2, true]
+SetVisibleInView[M_2, 1, false]
+SetColor[M_2, ""#404040""]
+SetLabelMode[M_2, 0]
+SetPointSize[M_2, 3]
+",
+"G_5 = (x(G), y(G) + r)
+ShowLabel[G_5, false]
+SetVisibleInView[G_5, 1, false]
+SetColor[G_5, ""#404040""]
+SetLabelMode[G_5, 0]
+SetPointSize[G_5, 3]
+",
+"gm = Segment[G_5,M_2]
+ShowLabel[gm, false]
+SetVisibleInView[gm, 1, true]
+SetLabelMode[gm, 0]
+",
+"G_4 = (x(G) - r, y(G) + r)
+ShowLabel[G_4, true]
+SetVisibleInView[G_4, 1, false]
+SetColor[G_4, ""#404040""]
+SetLabelMode[G_4, 0]
+SetPointSize[G_4, 3]
+",
+"G_3 = (x(G) + r, y(G) + r)
+ShowLabel[G_3, true]
+SetVisibleInView[G_3, 1, false]
+SetColor[G_3, ""#404040""]
+SetLabelMode[G_3, 0]
+SetPointSize[G_3, 3]
+",
+"G_1 = (x(G) + r, y(G))
+ShowLabel[G_1, true]
+SetVisibleInView[G_1, 1, false]
+SetColor[G_1, ""#404040""]
+SetLabelMode[G_1, 0]
+SetPointSize[G_1, 3]
+",
+"G_2 = (x(G) - r, y(G))
+ShowLabel[G_2, true]
+SetVisibleInView[G_2, 1, false]
+SetColor[G_2, ""#404040""]
+SetLabelMode[G_2, 0]
+SetPointSize[G_2, 3]
+",
+"Vieleck1 = Polygon[G_2,G_1,G_3,G,G_4]
+ShowLabel[Vieleck1, false]
+SetVisibleInView[Vieleck1, 1, true]
+SetFilling[Vieleck1, 0.05]
+SetLabelMode[Vieleck1, 0]
+",
+"B_2 = (-1, 10.9 + r - 0.1)
+ShowLabel[B_2, true]
+SetVisibleInView[B_2, 1, false]
+SetColor[B_2, ""#404040""]
+SetLabelMode[B_2, 0]
+SetPointSize[B_2, 3]
+",
+"B_1 = (-1, 11.1)
+ShowLabel[B_1, true]
+SetVisibleInView[B_1, 1, false]
+SetColor[B_1, ""#0000ff""]
+SetLabelMode[B_1, 0]
+SetPointSize[B_1, 3]
+",
+"b_1 = Segment[B_1,B_2]
+ShowLabel[b_1, false]
+SetVisibleInView[b_1, 1, false]
+SetLabelMode[b_1, 0]
+SetLineThickness[b_1, 2]
+",
+"B = Point[b_1]
+ShowLabel[B, true]
+SetVisibleInView[B, 1, true]
+SetColor[B, ""#ff0000""]
+SetLabelMode[B, 3]
+SetCaption[B, ""Lage der Schnittfläche""]
+SetPointSize[B, 7]
+SetCoords[B, -1, 12.542995954545274]
+",
+"B_5 = (12, y(B) - 5)
+ShowLabel[B_5, true]
+SetVisibleInView[B_5, 1, false]
+SetColor[B_5, ""#404040""]
+SetLabelMode[B_5, 0]
+SetPointSize[B_5, 3]
+",
+"B_4 = (-1, y(B) - 5)
+ShowLabel[B_4, true]
+SetVisibleInView[B_4, 1, false]
+SetColor[B_4, ""#7d7dff""]
+SetLabelMode[B_4, 0]
+SetPointSize[B_4, 3]
+",
+"a = Segment[B_4,B_5]
+ShowLabel[a, false]
+SetVisibleInView[a, 1, true]
+SetColor[a, ""#ff0000""]
+SetLabelMode[a, 0]
+",
+"G_0 = Intersect[gm,a]
+ShowLabel[G_0, false]
+SetVisibleInView[G_0, 1, false]
+SetColor[G_0, ""#404040""]
+SetLabelMode[G_0, 0]
+SetPointSize[G_0, 3]
+",
+"G_9 = Intersect[a,Vieleck1]
+ShowLabel[G_9, true]
+SetVisibleInView[G_9, 1, false]
+SetColor[G_9, ""#404040""]
+SetLabelMode[G_9, 0]
+SetPointSize[G_9, 3]
+",
+"g_9 = Segment[G_0,G_6]
+ShowLabel[g_9, true]
+SetVisibleInView[g_9, 1, true]
+SetColor[g_9, ""#009900""]
+SetLabelMode[g_9, 3]
+SetCaption[g_9, ""h""]
+SetLineThickness[g_9, 8]
+",
+"h = Length[g_9]
+SetValue[h, 1.5429959545452743]
+SetFilling[h, 0.1]
+",
+"H = (3.88303, 6)
+ShowLabel[H, false]
+SetVisibleInView[H, 1, true]
+SetColor[H, ""#0000ff""]
+SetLabelMode[H, 0]
+SetPointSize[H, 3]
+",
+"H_2 = (x(H) - r, y(H))
+ShowLabel[H_2, true]
+SetVisibleInView[H_2, 1, false]
+SetColor[H_2, ""#404040""]
+SetLabelMode[H_2, 0]
+SetPointSize[H_2, 3]
+",
+"H_1 = (x(H) + r, y(H))
+ShowLabel[H_1, true]
+SetVisibleInView[H_1, 1, false]
+SetColor[H_1, ""#404040""]
+SetLabelMode[H_1, 0]
+SetPointSize[H_1, 3]
+",
+"h_0 = Segment[H_2,H_1]
+ShowLabel[h_0, false]
+SetVisibleInView[h_0, 1, true]
+SetLabelMode[h_0, 0]
+SetLineThickness[h_0, 2]
+",
+"h_5 : 1 x + 0 y + 1 = 0
+ShowLabel[h_5, false]
+SetVisibleInView[h_5, 1, false]
+SetLabelMode[h_5, 0]
+SetLineThickness[h_5, 2]
+",
+"H_3 = (x(H), y(H) + r)
+ShowLabel[H_3, true]
+SetVisibleInView[H_3, 1, false]
+SetColor[H_3, ""#404040""]
+SetLabelMode[H_3, 0]
+SetPointSize[H_3, 3]
+",
+"N = (x(H), y(H) - 3)
+ShowLabel[N, false]
+SetVisibleInView[N, 1, true]
+SetColor[N, ""#404040""]
+SetLabelMode[N, 0]
+SetPointSize[N, 3]
+",
+"m_6 = Circle[M,r]
+ShowLabel[m_6, false]
+SetVisibleInView[m_6, 1, true]
+SetColor[m_6, ""#0000ff""]
+SetFilling[m_6, 0.2]
+SetLabelMode[m_6, 0]
+",
+"n_2 = Circle[N,r]
+ShowLabel[n_2, false]
+SetVisibleInView[n_2, 1, true]
+SetLabelMode[n_2, 0]
+",
+"V = (x(H), 11)
+ShowLabel[V, false]
+SetVisibleInView[V, 1, true]
+SetColor[V, ""#404040""]
+SetLabelMode[V, 0]
+SetPointSize[V, 3]
+",
+"W = (x(G), 11)
+ShowLabel[W, false]
+SetVisibleInView[W, 1, true]
+SetColor[W, ""#404040""]
+SetLabelMode[W, 0]
+SetPointSize[W, 3]
+",
+"V_12 = (x(V) - r, 11)
+ShowLabel[V_12, true]
+SetVisibleInView[V_12, 1, false]
+SetColor[V_12, ""#404040""]
+SetLabelMode[V_12, 0]
+SetPointSize[V_12, 3]
+",
+"V_11 = (x(V) + r, 11)
+ShowLabel[V_11, true]
+SetVisibleInView[V_11, 1, false]
+SetColor[V_11, ""#404040""]
+SetLabelMode[V_11, 0]
+SetPointSize[V_11, 3]
+",
+"W_12 = (x(W) - r, 11)
+ShowLabel[W_12, true]
+SetVisibleInView[W_12, 1, false]
+SetColor[W_12, ""#404040""]
+SetLabelMode[W_12, 0]
+SetPointSize[W_12, 3]
+",
+"W_11 = (x(W) + r, 11)
+ShowLabel[W_11, true]
+SetVisibleInView[W_11, 1, false]
+SetColor[W_11, ""#404040""]
+SetLabelMode[W_11, 0]
+SetPointSize[W_11, 3]
+",
+"W_13 = (x(G) - r / 10, 11 - r / 6)
+ShowLabel[W_13, true]
+SetVisibleInView[W_13, 1, false]
+SetColor[W_13, ""#404040""]
+SetLabelMode[W_13, 0]
+SetPointSize[W_13, 3]
+",
+"W_15 = (x(G) - r / 10, 11 + r / 6)
+ShowLabel[W_15, true]
+SetVisibleInView[W_15, 1, false]
+SetColor[W_15, ""#404040""]
+SetLabelMode[W_15, 0]
+SetPointSize[W_15, 3]
+",
+"W_14 = (x(G) + r / 10, 11 - r / 6)
+ShowLabel[W_14, true]
+SetVisibleInView[W_14, 1, false]
+SetColor[W_14, ""#404040""]
+SetLabelMode[W_14, 0]
+SetPointSize[W_14, 3]
+",
+"p_1 = Conic[W_12,W_13,W_14,W_11,W_15]
+ShowLabel[p_1, false]
+SetVisibleInView[p_1, 1, true]
+SetLabelMode[p_1, 0]
+",
+"V_13 = (x(H) - r / 10, 11 - r / 6)
+ShowLabel[V_13, true]
+SetVisibleInView[V_13, 1, false]
+SetColor[V_13, ""#404040""]
+SetLabelMode[V_13, 0]
+SetPointSize[V_13, 3]
+",
+"V_14 = (x(H) - r / 10, 11 + r / 6)
+ShowLabel[V_14, true]
+SetVisibleInView[V_14, 1, false]
+SetColor[V_14, ""#404040""]
+SetLabelMode[V_14, 0]
+SetPointSize[V_14, 3]
+",
+"V_15 = (x(H) + r / 10, 11 + r / 6)
+ShowLabel[V_15, true]
+SetVisibleInView[V_15, 1, false]
+SetColor[V_15, ""#404040""]
+SetLabelMode[V_15, 0]
+SetPointSize[V_15, 3]
+",
+"k_1 = Conic[V_12,V_13,V_11,V_15,V_14]
+ShowLabel[k_1, false]
+SetVisibleInView[k_1, 1, true]
+SetLabelMode[k_1, 0]
+",
+"q_1 = Semicircle[V_12,V_11]
+ShowLabel[q_1, false]
+SetVisibleInView[q_1, 1, true]
+SetLabelMode[q_1, 0]
+",
+"W_32 = (x(W_12), y(W_12) + r)
+ShowLabel[W_32, true]
+SetVisibleInView[W_32, 1, false]
+SetColor[W_32, ""#404040""]
+SetLabelMode[W_32, 0]
+SetPointSize[W_32, 3]
+",
+"W_35 = (x(W_15), y(W_15) + r)
+ShowLabel[W_35, true]
+SetVisibleInView[W_35, 1, false]
+SetColor[W_35, ""#404040""]
+SetLabelMode[W_35, 0]
+SetPointSize[W_35, 3]
+",
+"W_33 = (x(W_13), y(W_13) + r)
+ShowLabel[W_33, true]
+SetVisibleInView[W_33, 1, false]
+SetColor[W_33, ""#404040""]
+SetLabelMode[W_33, 0]
+SetPointSize[W_33, 3]
+",
+"W_31 = (x(W_11), y(W_11) + r)
+ShowLabel[W_31, true]
+SetVisibleInView[W_31, 1, false]
+SetColor[W_31, ""#404040""]
+SetLabelMode[W_31, 0]
+SetPointSize[W_31, 3]
+",
+"W_34 = (x(W_14), y(W_14) + r)
+ShowLabel[W_34, true]
+SetVisibleInView[W_34, 1, false]
+SetColor[W_34, ""#404040""]
+SetLabelMode[W_34, 0]
+SetPointSize[W_34, 3]
+",
+"W_3 = (x(W), y(W) + r)
+ShowLabel[W_3, false]
+SetVisibleInView[W_3, 1, false]
+SetColor[W_3, ""#404040""]
+SetLabelMode[W_3, 0]
+SetPointSize[W_3, 3]
+",
+"r_1 = Conic[W_32,W_33,W_34,W_31,W_35]
+ShowLabel[r_1, false]
+SetVisibleInView[r_1, 1, true]
+SetLayer[r_1, 9]
+SetLabelMode[r_1, 0]
+",
+"w_0 = Segment[W_12,W_32]
+ShowLabel[w_0, false]
+SetVisibleInView[w_0, 1, true]
+SetLabelMode[w_0, 0]
+",
+"w_2 = Segment[W_11,W_31]
+ShowLabel[w_2, true]
+SetVisibleInView[w_2, 1, true]
+SetColor[w_2, ""#0000ff""]
+SetLabelMode[w_2, 3]
+SetCaption[w_2, ""r""]
+SetLineThickness[w_2, 8]
+",
+"w_4 = Segment[W_32,W]
+ShowLabel[w_4, false]
+SetVisibleInView[w_4, 1, true]
+SetLabelMode[w_4, 0]
+",
+"w_3 = Segment[W,W_31]
+ShowLabel[w_3, false]
+SetVisibleInView[w_3, 1, true]
+SetLabelMode[w_3, 0]
+",
+"B_3 = (12.4, y(B))
+ShowLabel[B_3, true]
+SetVisibleInView[B_3, 1, false]
+SetColor[B_3, ""#404040""]
+SetLabelMode[B_3, 0]
+SetPointSize[B_3, 3]
+",
+"b = Segment[B,B_3]
+ShowLabel[b, false]
+SetVisibleInView[b, 1, true]
+SetColor[b, ""#ff0000""]
+SetLabelMode[b, 0]
+",
+"W_22 = Intersect[w_0,b]
+ShowLabel[W_22, true]
+SetVisibleInView[W_22, 1, false]
+SetColor[W_22, ""#404040""]
+SetLabelMode[W_22, 0]
+SetPointSize[W_22, 3]
+",
+"W_29 = Intersect[w_4,b]
+ShowLabel[W_29, true]
+SetVisibleInView[W_29, 1, false]
+SetColor[W_29, ""#404040""]
+SetLabelMode[W_29, 0]
+SetPointSize[W_29, 3]
+",
+"W_20 = Intersect[w_3,b]
+ShowLabel[W_20, true]
+SetVisibleInView[W_20, 1, false]
+SetColor[W_20, ""#404040""]
+SetLabelMode[W_20, 0]
+SetPointSize[W_20, 3]
+",
+"W_{2}1 = Intersect[w_2,b]
+ShowLabel[W_{2}1, true]
+SetVisibleInView[W_{2}1, 1, false]
+SetColor[W_{2}1, ""#404040""]
+SetLabelMode[W_{2}1, 0]
+SetPointSize[W_{2}1, 3]
+",
+"V_22 = Intersect[q_1,b,1]
+ShowLabel[V_22, true]
+SetVisibleInView[V_22, 1, false]
+SetColor[V_22, ""#404040""]
+SetLabelMode[V_22, 0]
+SetPointSize[V_22, 3]
+",
+"V_21 = Intersect[q_1,b,2]
+ShowLabel[V_21, false]
+SetVisibleInView[V_21, 1, false]
+SetColor[V_21, ""#404040""]
+SetLabelMode[V_21, 0]
+SetPointSize[V_21, 3]
+",
+"V_3 = (x(V), y(V) + r)
+ShowLabel[V_3, false]
+SetVisibleInView[V_3, 1, false]
+SetColor[V_3, ""#404040""]
+SetLabelMode[V_3, 0]
+SetPointSize[V_3, 3]
+",
+"v_4 = Segment[V,V_3]
+ShowLabel[v_4, false]
+SetVisibleInView[v_4, 1, false]
+SetLabelMode[v_4, 0]
+SetLineThickness[v_4, 2]
+",
+"V_2 = Intersect[b,v_4]
+ShowLabel[V_2, false]
+SetVisibleInView[V_2, 1, false]
+SetColor[V_2, ""#404040""]
+SetLabelMode[V_2, 0]
+SetPointSize[V_2, 3]
+",
+"V_25 = (x(H) + Distance[V_22, V_2] / 10, y(V_2) + Distance[V_22, V_2] / 6)
+ShowLabel[V_25, true]
+SetVisibleInView[V_25, 1, false]
+SetColor[V_25, ""#404040""]
+SetLabelMode[V_25, 0]
+SetPointSize[V_25, 3]
+",
+"V_24 = (x(H) - Distance[V_22, V_2] / 10, y(V_2) + Distance[V_22, V_2] / 6)
+ShowLabel[V_24, true]
+SetVisibleInView[V_24, 1, false]
+SetColor[V_24, ""#404040""]
+SetLabelMode[V_24, 0]
+SetPointSize[V_24, 3]
+",
+"V_23 = (x(H) - Distance[V_22, V_2] / 10, y(V_2) - Distance[V_22, V_2] / 6)
+ShowLabel[V_23, true]
+SetVisibleInView[V_23, 1, false]
+SetColor[V_23, ""#404040""]
+SetLabelMode[V_23, 0]
+SetPointSize[V_23, 3]
+",
+"c_2 = Conic[V_22,V_24,V_25,V_21,V_23]
+ShowLabel[c_2, false]
+SetVisibleInView[c_2, 1, true]
+SetColor[c_2, ""#0000ff""]
+SetFilling[c_2, 0.2]
+SetLabelMode[c_2, 0]
+",
+"W_23 = (x(W_13), y(W_13) + y(B) - 11)
+ShowLabel[W_23, true]
+SetVisibleInView[W_23, 1, false]
+SetColor[W_23, ""#404040""]
+SetLabelMode[W_23, 0]
+SetPointSize[W_23, 3]
+",
+"W_24 = (x(W_14), y(W_14) + y(B) - 11)
+ShowLabel[W_24, true]
+SetVisibleInView[W_24, 1, false]
+SetColor[W_24, ""#404040""]
+SetLabelMode[W_24, 0]
+SetPointSize[W_24, 3]
+",
+"W_25 = (x(W_15), y(W_15) + y(B) - 11)
+ShowLabel[W_25, true]
+SetVisibleInView[W_25, 1, false]
+SetColor[W_25, ""#404040""]
+SetLabelMode[W_25, 0]
+SetPointSize[W_25, 3]
+",
+"d_2 = Conic[W_22,W_23,W_24,W_{2}1,W_25]
+ShowLabel[d_2, false]
+SetVisibleInView[d_2, 1, true]
+SetColor[d_2, ""#0000ff""]
+SetFilling[d_2, 0.16]
+SetLabelMode[d_2, 0]
+",
+"W_26 = (x(G) - Distance[W_29, W_20] / 20, y(B) - Distance[W_29, W_20] / 12)
+ShowLabel[W_26, true]
+SetVisibleInView[W_26, 1, false]
+SetColor[W_26, ""#404040""]
+SetLabelMode[W_26, 0]
+SetPointSize[W_26, 3]
+",
+"W_28 = (x(G) - Distance[W_29, W_20] / 20, y(B) + Distance[W_29, W_20] / 12)
+ShowLabel[W_28, true]
+SetVisibleInView[W_28, 1, false]
+SetColor[W_28, ""#404040""]
+SetLabelMode[W_28, 0]
+SetPointSize[W_28, 3]
+",
+"W_27 = (x(G) + Distance[W_29, W_20] / 20, y(B) - Distance[W_29, W_20] / 12)
+ShowLabel[W_27, true]
+SetVisibleInView[W_27, 1, false]
+SetColor[W_27, ""#404040""]
+SetLabelMode[W_27, 0]
+SetPointSize[W_27, 3]
+",
+"e_2 = Conic[W_29,W_26,W_27,W_20,W_28]
+ShowLabel[e_2, false]
+SetVisibleInView[e_2, 1, true]
+SetColor[e_2, ""#ffffff""]
+SetFilling[e_2, 1]
+SetLabelMode[e_2, 0]
+SetLineThickness[e_2, 2]
+",
+"v_1 = Segment[V,V_11]
+ShowLabel[v_1, true]
+SetVisibleInView[v_1, 1, true]
+SetColor[v_1, ""#0000ff""]
+SetLabelMode[v_1, 3]
+SetCaption[v_1, ""r""]
+SetLineThickness[v_1, 8]
+",
+"w_1 = Segment[W,W_11]
+ShowLabel[w_1, true]
+SetVisibleInView[w_1, 1, true]
+SetColor[w_1, ""#0000ff""]
+SetLabelMode[w_1, 3]
+SetCaption[w_1, ""r""]
+SetLineThickness[w_1, 8]
+",
+"v_2 = Segment[V,V_2]
+ShowLabel[v_2, true]
+SetVisibleInView[v_2, 1, true]
+SetColor[v_2, ""#009900""]
+SetLabelMode[v_2, 3]
+SetCaption[v_2, ""h""]
+SetLineThickness[v_2, 8]
+",
+"W_2 = (x(W), y(B))
+ShowLabel[W_2, false]
+SetVisibleInView[W_2, 1, false]
+SetColor[W_2, ""#404040""]
+SetLabelMode[W_2, 0]
+SetPointSize[W_2, 3]
+",
+"w_6 = Segment[W,W_2]
+ShowLabel[w_6, true]
+SetVisibleInView[w_6, 1, true]
+SetColor[w_6, ""#009900""]
+SetLabelMode[w_6, 3]
+SetCaption[w_6, ""h""]
+SetLineThickness[w_6, 8]
+",
+"v_3 = Segment[V_2,V_21]
+ShowLabel[v_3, false]
+SetVisibleInView[v_3, 1, true]
+SetColor[v_3, ""#ff0000""]
+SetLabelMode[v_3, 3]
+SetCaption[v_3, ""s""]
+SetLineThickness[v_3, 8]
+",
+"vw = Segment[V_3,W_3]
+ShowLabel[vw, false]
+SetVisibleInView[vw, 1, true]
+SetLabelMode[vw, 0]
+",
+"vw1 = Segment[V_11,W]
+ShowLabel[vw1, false]
+SetVisibleInView[vw1, 1, true]
+SetLabelMode[vw1, 0]
+",
+"w_5 = Segment[W_2,W_3]
+ShowLabel[w_5, false]
+SetVisibleInView[w_5, 1, true]
+SetLabelMode[w_5, 0]
+",
+"v_5 = Segment[V_2,V_3]
+ShowLabel[v_5, false]
+SetVisibleInView[v_5, 1, true]
+SetLabelMode[v_5, 0]
+",
+"v = Segment[V,V_21]
+ShowLabel[v, true]
+SetVisibleInView[v, 1, true]
+SetColor[v, ""#0000ff""]
+SetLabelMode[v, 3]
+SetCaption[v, ""r""]
+",
+"w_7 = Segment[W_2,W_20]
+ShowLabel[w_7, true]
+SetVisibleInView[w_7, 1, true]
+SetColor[w_7, ""#009900""]
+SetLabelMode[w_7, 3]
+SetCaption[w_7, ""h""]
+SetLineThickness[w_7, 8]
+",
+"c = Segment[B_4,B]
+ShowLabel[c, false]
+SetVisibleInView[c, 1, true]
+SetColor[c, ""#ff0000""]
+SetLabelMode[c, 0]
+",
+"d = CircleSector[H,H_1,H_2]
+ShowLabel[d, false]
+SetVisibleInView[d, 1, true]
+SetFilling[d, 0.04]
+SetLabelMode[d, 0]
+",
+"H_7 = Intersect[d,a]
+ShowLabel[H_7, true]
+SetVisibleInView[H_7, 1, false]
+SetColor[H_7, ""#404040""]
+SetLabelMode[H_7, 0]
+SetPointSize[H_7, 3]
+",
+"g_7 = Segment[G,G_1]
+ShowLabel[g_7, true]
+SetVisibleInView[g_7, 1, true]
+SetColor[g_7, ""#0000ff""]
+SetLabelMode[g_7, 3]
+SetCaption[g_7, ""r""]
+SetLineThickness[g_7, 8]
+",
+"M_1 = (x(G), y(M) + r)
+ShowLabel[M_1, true]
+SetVisibleInView[M_1, 1, false]
+SetColor[M_1, ""#404040""]
+SetLabelMode[M_1, 0]
+SetPointSize[M_1, 3]
+",
+"M_3 = (x(G) + r, y(M))
+ShowLabel[M_3, true]
+SetVisibleInView[M_3, 1, false]
+SetColor[M_3, ""#404040""]
+SetLabelMode[M_3, 0]
+SetPointSize[M_3, 3]
+",
+"M_4 = (x(G) - r, y(M))
+ShowLabel[M_4, true]
+SetVisibleInView[M_4, 1, false]
+SetColor[M_4, ""#404040""]
+SetLabelMode[M_4, 0]
+SetPointSize[M_4, 3]
+",
+"N_4 = (x(H) - r, y(N))
+ShowLabel[N_4, true]
+SetVisibleInView[N_4, 1, false]
+SetColor[N_4, ""#404040""]
+SetLabelMode[N_4, 0]
+SetPointSize[N_4, 3]
+",
+"N_3 = (x(H) + r, y(N))
+ShowLabel[N_3, true]
+SetVisibleInView[N_3, 1, false]
+SetColor[N_3, ""#404040""]
+SetLabelMode[N_3, 0]
+SetPointSize[N_3, 3]
+",
+"N_2 = (x(H), y(N) - r)
+ShowLabel[N_2, true]
+SetVisibleInView[N_2, 1, false]
+SetColor[N_2, ""#404040""]
+SetLabelMode[N_2, 0]
+SetPointSize[N_2, 3]
+",
+"N_1 = (x(H), y(N) + r)
+ShowLabel[N_1, true]
+SetVisibleInView[N_1, 1, false]
+SetColor[N_1, ""#404040""]
+SetLabelMode[N_1, 0]
+SetPointSize[N_1, 3]
+",
+"hn = Segment[H_3,N_2]
+ShowLabel[hn, false]
+SetVisibleInView[hn, 1, true]
+SetLabelMode[hn, 0]
+",
+"hg1 = Segment[H_3,G_4]
+ShowLabel[hg1, false]
+SetVisibleInView[hg1, 1, true]
+SetLabelMode[hg1, 0]
+",
+"nm = Segment[N_2,M_2]
+ShowLabel[nm, false]
+SetVisibleInView[nm, 1, true]
+SetLabelMode[nm, 0]
+SetLineThickness[nm, 2]
+",
+"nm2_1 = Segment[N_4,M_3]
+ShowLabel[nm2_1, false]
+SetVisibleInView[nm2_1, 1, true]
+SetLabelMode[nm2_1, 0]
+",
+"hg = Segment[H_1,G_2]
+ShowLabel[hg, false]
+SetVisibleInView[hg, 1, true]
+SetLabelMode[hg, 0]
+",
+"g_0 = Segment[G_4,G_3]
+ShowLabel[g_0, false]
+SetVisibleInView[g_0, 1, true]
+SetLabelMode[g_0, 0]
+",
+"H_5 = Intersect[hn,a]
+ShowLabel[H_5, true]
+SetVisibleInView[H_5, 1, false]
+SetColor[H_5, ""#404040""]
+SetLabelMode[H_5, 0]
+SetPointSize[H_5, 3]
+",
+"h_2 = Segment[H,H_5]
+ShowLabel[h_2, true]
+SetVisibleInView[h_2, 1, true]
+SetColor[h_2, ""#009900""]
+SetLabelMode[h_2, 3]
+SetCaption[h_2, ""h""]
+SetLineThickness[h_2, 8]
+",
+"h_1 = Segment[H,H_1]
+ShowLabel[h_1, true]
+SetVisibleInView[h_1, 1, true]
+SetColor[h_1, ""#0000ff""]
+SetLabelMode[h_1, 3]
+SetCaption[h_1, ""r""]
+SetLineThickness[h_1, 8]
+",
+"N_6 = (x(H_6), y(N))
+ShowLabel[N_6, true]
+SetVisibleInView[N_6, 1, false]
+SetColor[N_6, ""#404040""]
+SetLabelMode[N_6, 0]
+SetPointSize[N_6, 3]
+",
+"N_7 = (x(H_7), y(N))
+ShowLabel[N_7, true]
+SetVisibleInView[N_7, 1, false]
+SetColor[N_7, ""#404040""]
+SetLabelMode[N_7, 0]
+SetPointSize[N_7, 3]
+",
+"h_3 = Segment[H,H_6]
+ShowLabel[h_3, true]
+SetVisibleInView[h_3, 1, true]
+SetColor[h_3, ""#0000ff""]
+SetLabelMode[h_3, 3]
+SetCaption[h_3, ""r""]
+",
+"h_4 = Segment[H_5,H_6]
+ShowLabel[h_4, false]
+SetVisibleInView[h_4, 1, true]
+SetColor[h_4, ""#ff0000""]
+SetLabelMode[h_4, 3]
+SetCaption[h_4, ""s""]
+SetLineThickness[h_4, 8]
+",
+"n_1 = Circle[N,N_6]
+ShowLabel[n_1, false]
+SetVisibleInView[n_1, 1, true]
+SetColor[n_1, ""#0000ff""]
+SetFilling[n_1, 0.2]
+SetLabelMode[n_1, 0]
+",
+"hn1 = Segment[H_2,N_4]
+ShowLabel[hn1, false]
+SetVisibleInView[hn1, 1, true]
+SetLabelMode[hn1, 0]
+SetLineThickness[hn1, 2]
+",
+"hn2 = Segment[H_7,N_7]
+ShowLabel[hn2, false]
+SetVisibleInView[hn2, 1, true]
+SetLabelMode[hn2, 0]
+SetLineThickness[hn2, 2]
+",
+"hn3 = Segment[H_6,N_6]
+ShowLabel[hn3, false]
+SetVisibleInView[hn3, 1, true]
+SetLabelMode[hn3, 0]
+SetLineThickness[hn3, 2]
+",
+"hn4 = Segment[H_1,N_3]
+ShowLabel[hn4, false]
+SetVisibleInView[hn4, 1, true]
+SetLabelMode[hn4, 0]
+SetLineThickness[hn4, 2]
+",
+"n = Segment[N,N_6]
+ShowLabel[n, false]
+SetVisibleInView[n, 1, true]
+SetColor[n, ""#ff0000""]
+SetLabelMode[n, 3]
+SetCaption[n, ""s""]
+SetLineThickness[n, 8]
+",
+"nm2 = Segment[N_1,M_1]
+ShowLabel[nm2, false]
+SetVisibleInView[nm2, 1, true]
+SetLabelMode[nm2, 0]
+SetLineThickness[nm2, 2]
+",
+"M_6 = (x(G_6), y(M))
+ShowLabel[M_6, true]
+SetVisibleInView[M_6, 1, false]
+SetColor[M_6, ""#404040""]
+SetLabelMode[M_6, 0]
+SetPointSize[M_6, 3]
+",
+"M_7 = (x(G_7), y(M))
+ShowLabel[M_7, true]
+SetVisibleInView[M_7, 1, false]
+SetColor[M_7, ""#404040""]
+SetLabelMode[M_7, 0]
+SetPointSize[M_7, 3]
+",
+"gm1 = Segment[G_2,M_4]
+ShowLabel[gm1, false]
+SetVisibleInView[gm1, 1, true]
+SetLabelMode[gm1, 0]
+SetLineThickness[gm1, 2]
+",
+"gm2 = Segment[G_7,M_7]
+ShowLabel[gm2, false]
+SetVisibleInView[gm2, 1, true]
+SetLabelMode[gm2, 0]
+SetLineThickness[gm2, 2]
+",
+"gm3 = Segment[G_6,M_6]
+ShowLabel[gm3, false]
+SetVisibleInView[gm3, 1, true]
+SetLabelMode[gm3, 0]
+SetLineThickness[gm3, 2]
+",
+"gm4 = Segment[G_1,M_3]
+ShowLabel[gm4, false]
+SetVisibleInView[gm4, 1, true]
+SetLabelMode[gm4, 0]
+SetLineThickness[gm4, 2]
+",
+"g_8 = Segment[G,G_0]
+ShowLabel[g_8, true]
+SetVisibleInView[g_8, 1, true]
+SetColor[g_8, ""#009900""]
+SetLabelMode[g_8, 3]
+SetCaption[g_8, ""h""]
+SetLineThickness[g_8, 8]
+",
+"m_7 = Segment[M,M_6]
+ShowLabel[m_7, true]
+SetVisibleInView[m_7, 1, true]
+SetColor[m_7, ""#009900""]
+SetLabelMode[m_7, 3]
+SetCaption[m_7, ""h""]
+SetLineThickness[m_7, 8]
+",
+"m_1 = Segment[G_6,G_8]
+ShowLabel[m_1, false]
+SetVisibleInView[m_1, 1, true]
+SetColor[m_1, ""#0000ff""]
+SetLabelMode[m_1, 0]
+SetLineThickness[m_1, 2]
+",
+"m_2 = Segment[G_9,G_7]
+ShowLabel[m_2, false]
+SetVisibleInView[m_2, 1, true]
+SetColor[m_2, ""#0000ff""]
+SetLabelMode[m_2, 0]
+SetLineThickness[m_2, 2]
+",
+"m_4 = Segment[M_4,M_7]
+ShowLabel[m_4, false]
+SetVisibleInView[m_4, 1, true]
+SetColor[m_4, ""#0000ff""]
+SetLabelMode[m_4, 0]
+SetLineThickness[m_4, 2]
+",
+"m_3 = Segment[M_6,M_3]
+ShowLabel[m_3, false]
+SetVisibleInView[m_3, 1, true]
+SetColor[m_3, ""#0000ff""]
+SetLabelMode[m_3, 0]
+SetLineThickness[m_3, 2]
+",
+"flächen1 = Area[n_1]
+SetValue[flächen1, 12.155335577679402]
+SetFilling[flächen1, 0.1]
+",
+"Textn1 = Text[""Fläche = "" + flächen1]
+ShowLabel[Textn1, false]
+SetVisibleInView[Textn1, 1, false]
+SetLabelMode[Textn1, 0]
+",
+"flächem6 = Area[m_6]
+SetValue[flächem6, 19.634954084936208]
+SetFilling[flächem6, 0.1]
+",
+"Textm6 = Text[""Fläche = "" + flächem6]
+ShowLabel[Textm6, false]
+SetVisibleInView[Textm6, 1, false]
+SetLabelMode[Textm6, 0]
+",
+"m_5 = Circle[M,h]
+ShowLabel[m_5, false]
+SetVisibleInView[m_5, 1, true]
+SetColor[m_5, ""#ffffff""]
+SetFilling[m_5, 1]
+SetLabelMode[m_5, 0]
+SetLineThickness[m_5, 2]
+",
+"flächem5 = Area[m_5]
+SetValue[flächem5, 7.479618507256786]
+SetFilling[flächem5, 0.1]
+",
+"Textm5 = Text["""" + flächem5 + """"]
+ShowLabel[Textm5, false]
+SetVisibleInView[Textm5, 1, false]
+SetLabelMode[Textm5, 0]
+",
+"Text5 = FormulaText[""A_{Kreis} = π\cdot \rho^{2}""]
+ShowLabel[Text5, false]
+SetVisibleInView[Text5, 1, true]
+SetConditionToShowObject[Text5, f]
+SetColor[Text5, ""#0000ff""]
+SetLabelMode[Text5, 0]
+",
+"Text6 = FormulaText[""
+A_{Kreisring} = A_{Kreis_{groß}} - A_{Kreis_{klein}}""]
+ShowLabel[Text6, false]
+SetVisibleInView[Text6, 1, true]
+SetConditionToShowObject[Text6, f]
+SetColor[Text6, ""#0000ff""]
+SetLabelMode[Text6, 0]
+",
+"Text8 = FormulaText[""= \pi \cdot r^{2} - \pi \cdot h^{2}""]
+ShowLabel[Text8, false]
+SetVisibleInView[Text8, 1, true]
+SetConditionToShowObject[Text8, f]
+SetColor[Text8, ""#0000ff""]
+SetLabelMode[Text8, 0]
+",
+"Text7 = FormulaText[""= \pi \cdot\left( r^{2} - h^{2} \right) ""]
+ShowLabel[Text7, false]
+SetVisibleInView[Text7, 1, true]
+SetConditionToShowObject[Text7, f]
+SetColor[Text7, ""#0000ff""]
+SetLabelMode[Text7, 0]
+",
+"Text9 = FormulaText[""= \pi\cdot\left( r^{2} - h^{2} \right) ""]
+ShowLabel[Text9, false]
+SetVisibleInView[Text9, 1, true]
+SetConditionToShowObject[Text9, f]
+SetColor[Text9, ""#0000ff""]
+SetLabelMode[Text9, 0]
+",
+"e = Conic[W_22,W_23,W_24,W_{2}1,W_25]
+ShowLabel[e, false]
+SetVisibleInView[e, 1, true]
+SetColor[e, ""#0000ff""]
+SetLabelMode[e, 0]
+",
+"f = false
+ShowLabel[f, true]
+SetVisibleInView[f, 1, true]
+SetLabelMode[f, 0]
+SetCaption[f, ""Schnittflächeninhalt""]
+",
+"A = Midpoint[h_4]
+ShowLabel[A, true]
+SetVisibleInView[A, 1, false]
+SetColor[A, ""#444444""]
+SetLayer[A, 8]
+SetLabelMode[A, 0]
+SetPointSize[A, 4]
+",
+"C = Midpoint[v_3]
+ShowLabel[C, true]
+SetVisibleInView[C, 1, false]
+SetColor[C, ""#444444""]
+SetLayer[C, 8]
+SetLabelMode[C, 0]
+SetPointSize[C, 4]
+",
+"D = Midpoint[n]
+ShowLabel[D, true]
+SetVisibleInView[D, 1, false]
+SetColor[D, ""#444444""]
+SetLayer[D, 8]
+SetLabelMode[D, 0]
+SetPointSize[D, 4]
+",
+"Text1 = FormulaText[""\rho""]
+ShowLabel[Text1, false]
+SetVisibleInView[Text1, 1, true]
+SetColor[Text1, ""#ff0000""]
+SetLayer[Text1, 8]
+SetLabelMode[Text1, 0]
+",
+"Text2 = FormulaText[""\rho""]
+ShowLabel[Text2, false]
+SetVisibleInView[Text2, 1, true]
+SetColor[Text2, ""#ff0000""]
+SetLayer[Text2, 8]
+SetLabelMode[Text2, 0]
+",
+"Text3 = FormulaText[""\rho""]
+ShowLabel[Text3, false]
+SetVisibleInView[Text3, 1, true]
+SetColor[Text3, ""#ff0000""]
+SetLayer[Text3, 8]
+SetLabelMode[Text3, 0]
+",

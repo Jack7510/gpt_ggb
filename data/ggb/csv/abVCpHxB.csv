@@ -1,0 +1,219 @@
+ggbscript,prompt
+"A = (4.86, -1)
+ShowLabel[A, true]
+SetVisibleInView[A, 1, true]
+SetColor[A, ""#4d4dff""]
+SetLabelMode[A, 0]
+",
+"B = (10.24, -0.94)
+ShowLabel[B, true]
+SetVisibleInView[B, 1, true]
+SetColor[B, ""#4d4dff""]
+SetLabelMode[B, 0]
+",
+"c = Circle[A,B]
+ShowLabel[c, true]
+SetVisibleInView[c, 1, true]
+SetLabelMode[c, 0]
+",
+"C = Point[c]
+ShowLabel[C, true]
+SetVisibleInView[C, 1, true]
+SetColor[C, ""#7d7dff""]
+SetLabelMode[C, 0]
+SetCoords[C, 9.112910684760049, -4.295565309238128]
+",
+"D = (13.024596742170452, 3.5669166250222526)
+ShowLabel[D, true]
+SetVisibleInView[D, 1, true]
+SetColor[D, ""#4d4dff""]
+SetLabelMode[D, 0]
+",
+"E = (22.559106797711628, -9.349166330217523)
+ShowLabel[E, true]
+SetVisibleInView[E, 1, true]
+SetColor[E, ""#4d4dff""]
+SetLabelMode[E, 0]
+",
+"t1 = Polygon[C,D,E]
+ShowLabel[t1, false]
+SetVisibleInView[t1, 1, true]
+SetColor[t1, ""#993300""]
+SetFilling[t1, 0.10000000149011612]
+SetLabelMode[t1, 0]
+",
+"F = Midpoint[d]
+ShowLabel[F, true]
+SetVisibleInView[F, 1, true]
+SetColor[F, ""#444444""]
+SetLabelMode[F, 0]
+SetPointSize[F, 4]
+",
+"G = Midpoint[e]
+ShowLabel[G, true]
+SetVisibleInView[G, 1, true]
+SetColor[G, ""#444444""]
+SetLabelMode[G, 0]
+SetPointSize[G, 4]
+",
+"f = Segment[F,D]
+ShowLabel[f, true]
+SetVisibleInView[f, 1, true]
+SetLabelMode[f, 0]
+",
+"g = Segment[G,E]
+ShowLabel[g, true]
+SetVisibleInView[g, 1, true]
+SetLabelMode[g, 0]
+",
+"H = Intersect[f,g]
+ShowLabel[H, true]
+SetVisibleInView[H, 1, true]
+SetColor[H, ""#444444""]
+SetLabelMode[H, 0]
+SetPointSize[H, 4]
+",
+"loc1 = Locus[H,C]
+ShowLabel[loc1, true]
+SetVisibleInView[loc1, 1, true]
+SetLabelMode[loc1, 0]
+",
+"I = (-12.679722684352079, -3.2124496815387453)
+ShowLabel[I, true]
+SetVisibleInView[I, 1, true]
+SetColor[I, ""#4d4dff""]
+SetLabelMode[I, 0]
+",
+"J = (-14.03167760288566, -18.001181035293822)
+ShowLabel[J, true]
+SetVisibleInView[J, 1, true]
+SetColor[J, ""#4d4dff""]
+SetLabelMode[J, 0]
+",
+"K = (3.378190837822287, -12.869270528207172)
+ShowLabel[K, true]
+SetVisibleInView[K, 1, true]
+SetColor[K, ""#4d4dff""]
+SetLabelMode[K, 0]
+",
+"t2 = Polygon[I,J,K]
+ShowLabel[t2, false]
+SetVisibleInView[t2, 1, true]
+SetColor[t2, ""#993300""]
+SetFilling[t2, 0.10000000149011612]
+SetLabelMode[t2, 0]
+",
+"h = OrthogonalLine[K,k]
+ShowLabel[h, true]
+SetVisibleInView[h, 1, true]
+SetLabelMode[h, 0]
+",
+"l = OrthogonalLine[I,i]
+ShowLabel[l, true]
+SetVisibleInView[l, 1, true]
+SetLabelMode[l, 0]
+",
+"m = OrthogonalLine[J,j]
+ShowLabel[m, true]
+SetVisibleInView[m, 1, true]
+SetLabelMode[m, 0]
+",
+"L = Intersect[h,l]
+ShowLabel[L, true]
+SetVisibleInView[L, 1, true]
+SetColor[L, ""#444444""]
+SetLabelMode[L, 0]
+SetPointSize[L, 4]
+",
+"p = Circle[I,K,J]
+ShowLabel[p, true]
+SetVisibleInView[p, 1, true]
+SetLabelMode[p, 0]
+",
+"M = Intersect[p,h,2]
+ShowLabel[M, true]
+SetVisibleInView[M, 1, true]
+SetColor[M, ""#444444""]
+SetLabelMode[M, 0]
+SetPointSize[M, 4]
+",
+"N = Intersect[p,m,2]
+ShowLabel[N, true]
+SetVisibleInView[N, 1, true]
+SetColor[N, ""#444444""]
+SetLabelMode[N, 0]
+SetPointSize[N, 4]
+",
+"O = Intersect[p,l,2]
+ShowLabel[O, true]
+SetVisibleInView[O, 1, true]
+SetColor[O, ""#444444""]
+SetLabelMode[O, 0]
+SetPointSize[O, 4]
+",
+"P = Midpoint[L,M]
+ShowLabel[P, true]
+SetVisibleInView[P, 1, true]
+SetColor[P, ""#444444""]
+SetLabelMode[P, 0]
+SetPointSize[P, 4]
+",
+"Q = Midpoint[L,N]
+ShowLabel[Q, true]
+SetVisibleInView[Q, 1, true]
+SetColor[Q, ""#444444""]
+SetLabelMode[Q, 0]
+SetPointSize[Q, 4]
+",
+"R = Midpoint[L,O]
+ShowLabel[R, true]
+SetVisibleInView[R, 1, true]
+SetColor[R, ""#444444""]
+SetLabelMode[R, 0]
+SetPointSize[R, 4]
+",
+"S = Point[p]
+ShowLabel[S, true]
+SetVisibleInView[S, 1, true]
+SetColor[S, ""#7d7dff""]
+SetLabelMode[S, 0]
+SetCoords[S, 3.4577374546605615, -10.1752140668959]
+",
+"n = Segment[L,S]
+ShowLabel[n, true]
+SetVisibleInView[n, 1, true]
+SetLabelMode[n, 0]
+",
+"T = Midpoint[n]
+ShowLabel[T, true]
+SetVisibleInView[T, 1, true]
+SetColor[T, ""#444444""]
+SetLabelMode[T, 0]
+SetPointSize[T, 4]
+",
+"loc2 = Locus[T,S]
+ShowLabel[loc2, true]
+SetVisibleInView[loc2, 1, true]
+SetLabelMode[loc2, 0]
+",
+"U = Midpoint[L,J]
+ShowLabel[U, true]
+SetVisibleInView[U, 1, true]
+SetColor[U, ""#444444""]
+SetLabelMode[U, 0]
+SetPointSize[U, 4]
+",
+"V = Midpoint[L,I]
+ShowLabel[V, true]
+SetVisibleInView[V, 1, true]
+SetColor[V, ""#444444""]
+SetLabelMode[V, 0]
+SetPointSize[V, 4]
+",
+"W = Midpoint[L,K]
+ShowLabel[W, true]
+SetVisibleInView[W, 1, true]
+SetColor[W, ""#444444""]
+SetLabelMode[W, 0]
+SetPointSize[W, 4]
+",

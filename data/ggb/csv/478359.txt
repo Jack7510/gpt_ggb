@@ -1,0 +1,26 @@
+SetActiveView["G"]
+SetBackgroundColor[255, 255, 255]
+a : 1 x + -2 y + -11 = 0
+ShowLabel[a, true]
+SetVisibleInView[a, 1, true]
+SetColor[a, "#00cc00"]
+SetLabelMode[a, 1]
+SetLineThickness[a, 2]
+b : 2 x + 3 y + 13 = 0
+ShowLabel[b, true]
+SetVisibleInView[b, 1, true]
+SetColor[b, "#006699"]
+SetLabelMode[b, 1]
+SetLineThickness[b, 2]
+A = Intersect[b,a]
+ShowLabel[A, true]
+SetVisibleInView[A, 1, true]
+SetColor[A, "#ff0000"]
+SetLabelMode[A, 1]
+SetPointSize[A, 3]
+texto1 = Text["Solución:
+x=1 
+y=-5"]
+ShowLabel[texto1, true]
+SetVisibleInView[texto1, 1, true]
+SetLabelMode[texto1, 0]

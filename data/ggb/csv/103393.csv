@@ -1,0 +1,82 @@
+ggbscript,prompt
+"A = (8.38, 2.76)
+ShowLabel[A, true]
+SetVisibleInView[A, 1, true]
+SetLabelMode[A, 0]
+SetPointSize[A, 3]
+",
+"B = (5.06, -3.7)
+ShowLabel[B, true]
+SetVisibleInView[B, 1, true]
+SetLabelMode[B, 0]
+SetPointSize[B, 3]
+",
+"a = Segment[A,B]
+ShowLabel[a, false]
+SetVisibleInView[a, 1, false]
+SetLabelMode[a, 0]
+SetLineThickness[a, 2]
+",
+"distanceAB = Distance[A,B]
+SetValue[distanceAB, 7.2631948893031915]
+SetFilling[distanceAB, 0.1]
+",
+"C = Point[Circle[A, distanceAB]]
+ShowLabel[C, true]
+SetVisibleInView[C, 1, true]
+SetLabelMode[C, 0]
+SetPointSize[C, 3]
+SetCoords[C, 11.714426295719894, -3.6925654803660617]
+",
+"b = Segment[A,C]
+ShowLabel[b, false]
+SetVisibleInView[b, 1, false]
+SetLabelMode[b, 0]
+SetLineThickness[b, 2]
+",
+"poly1 = Polygon[A,B,C]
+SetLineThickness[poly1, 2]
+ShowLabel[poly1, false]
+SetVisibleInView[poly1, 1, true]
+SetColor[poly1, ""#ffffff""]
+SetFilling[poly1, 0.1]
+SetLabelMode[poly1, 0]
+",
+"distanceAC = Distance[A,C]
+SetValue[distanceAC, 7.263194889303191]
+SetFilling[distanceAC, 0.1]
+",
+"α = If[ Angle[C,B,A] <= pi, Angle[C,B,A], Angle[A,B,C]]
+SetVisibleInView[α, 1, true]
+SetValue[α, 1.0949481990199859]
+SetLineThickness[α, 2]
+ShowLabel[α, true]
+SetVisibleInView[α, 1, true]
+SetColor[α, ""#0033cc""]
+SetFilling[α, 0.7]
+SetLabelMode[α, 2]
+",
+"β = If[ Angle[A,C,B] <= pi, Angle[A,C,B], Angle[B,C,A]]
+SetVisibleInView[β, 1, true]
+SetValue[β, 1.0949481990199859]
+SetLineThickness[β, 2]
+ShowLabel[β, true]
+SetVisibleInView[β, 1, true]
+SetColor[β, ""#0033cc""]
+SetFilling[β, 0.7]
+SetLabelMode[β, 2]
+",
+"γ = If[ Angle[B,A,C] <= pi, Angle[B,A,C], Angle[C,A,B]]
+SetVisibleInView[γ, 1, true]
+SetValue[γ, 0.9516962555498215]
+SetLineThickness[γ, 2]
+ShowLabel[γ, true]
+SetVisibleInView[γ, 1, true]
+SetColor[γ, ""#00cc00""]
+SetFilling[γ, 0.65]
+SetLabelMode[γ, 2]
+",
+"distanceBC = Distance[B,C]
+SetValue[distanceBC, 6.6544304487499595]
+SetFilling[distanceBC, 0.1]
+",

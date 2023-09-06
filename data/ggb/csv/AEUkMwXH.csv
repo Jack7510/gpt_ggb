@@ -1,0 +1,311 @@
+ggbscript,prompt
+"A = (-1.43, 0.93)
+ShowLabel[A, true]
+SetVisibleInView[A, 1, true]
+SetColor[A, ""#4d4dff""]
+SetLabelMode[A, 0]
+",
+"B = (-4.167066998934353, -6.196907996661639)
+ShowLabel[B, true]
+SetVisibleInView[B, 1, true]
+SetColor[B, ""#4d4dff""]
+SetLabelMode[B, 0]
+",
+"f = Segment[A,B]
+ShowLabel[f, true]
+SetVisibleInView[f, 1, true]
+SetLabelMode[f, 0]
+",
+"C = (2.2064157659013808, -6.5590376992091235)
+ShowLabel[C, true]
+SetVisibleInView[C, 1, true]
+SetColor[C, ""#4d4dff""]
+SetLabelMode[C, 0]
+",
+"g = Segment[B,C]
+ShowLabel[g, true]
+SetVisibleInView[g, 1, true]
+SetLabelMode[g, 0]
+",
+"h = Segment[C,A]
+ShowLabel[h, true]
+SetVisibleInView[h, 1, true]
+SetLabelMode[h, 0]
+",
+"D = Midpoint[g]
+ShowLabel[D, true]
+SetVisibleInView[D, 1, true]
+SetColor[D, ""#444444""]
+SetLabelMode[D, 0]
+SetPointSize[D, 4]
+",
+"E = Midpoint[f]
+ShowLabel[E, true]
+SetVisibleInView[E, 1, true]
+SetColor[E, ""#444444""]
+SetLabelMode[E, 0]
+SetPointSize[E, 4]
+",
+"F = Midpoint[h]
+ShowLabel[F, true]
+SetVisibleInView[F, 1, true]
+SetColor[F, ""#444444""]
+SetLabelMode[F, 0]
+SetPointSize[F, 4]
+",
+"i = Segment[E,D]
+ShowLabel[i, true]
+SetVisibleInView[i, 1, true]
+SetLabelMode[i, 0]
+",
+"j = Segment[D,F]
+ShowLabel[j, true]
+SetVisibleInView[j, 1, true]
+SetLabelMode[j, 0]
+",
+"k = Segment[F,E]
+ShowLabel[k, true]
+SetVisibleInView[k, 1, true]
+SetLabelMode[k, 0]
+",
+"G = (12.73164527414322, 0.18678475806653486)
+ShowLabel[G, true]
+SetVisibleInView[G, 1, true]
+SetColor[G, ""#4d4dff""]
+SetLabelMode[G, 0]
+",
+"H = (9.865166422640417, -4.829553232063367)
+ShowLabel[H, true]
+SetVisibleInView[H, 1, true]
+SetColor[H, ""#4d4dff""]
+SetLabelMode[H, 0]
+",
+"l = Segment[G,H]
+ShowLabel[l, true]
+SetVisibleInView[l, 1, true]
+SetLabelMode[l, 0]
+",
+"I = (16.06181923397736, -4.998169635092943)
+ShowLabel[I, true]
+SetVisibleInView[I, 1, true]
+SetColor[I, ""#4d4dff""]
+SetLabelMode[I, 0]
+",
+"m = Segment[H,I]
+ShowLabel[m, true]
+SetVisibleInView[m, 1, true]
+SetLabelMode[m, 0]
+",
+"n = Segment[I,G]
+ShowLabel[n, true]
+SetVisibleInView[n, 1, true]
+SetLabelMode[n, 0]
+",
+"J = Midpoint[l]
+ShowLabel[J, true]
+SetVisibleInView[J, 1, true]
+SetColor[J, ""#444444""]
+SetLabelMode[J, 0]
+SetPointSize[J, 4]
+",
+"K = Midpoint[n]
+ShowLabel[K, true]
+SetVisibleInView[K, 1, true]
+SetColor[K, ""#444444""]
+SetLabelMode[K, 0]
+SetPointSize[K, 4]
+",
+"L = Midpoint[m]
+ShowLabel[L, true]
+SetVisibleInView[L, 1, true]
+SetColor[L, ""#444444""]
+SetLabelMode[L, 0]
+SetPointSize[L, 4]
+",
+"p = Segment[G,L]
+ShowLabel[p, true]
+SetVisibleInView[p, 1, true]
+SetLabelMode[p, 0]
+",
+"M = (2.9306751709963508, 11.9095771307126)
+ShowLabel[M, true]
+SetVisibleInView[M, 1, true]
+SetColor[M, ""#4d4dff""]
+SetLabelMode[M, 0]
+",
+"N = (1.1001463543066468, 6.191468124673128)
+ShowLabel[N, true]
+SetVisibleInView[N, 1, true]
+SetColor[N, ""#4d4dff""]
+SetLabelMode[N, 0]
+",
+"q = Segment[M,N]
+ShowLabel[q, true]
+SetVisibleInView[q, 1, true]
+SetLabelMode[q, 0]
+",
+"O = (6.513749507674869, 6.135076425158876)
+ShowLabel[O, true]
+SetVisibleInView[O, 1, true]
+SetColor[O, ""#4d4dff""]
+SetLabelMode[O, 0]
+",
+"r = Segment[N,O]
+ShowLabel[r, true]
+SetVisibleInView[r, 1, true]
+SetLabelMode[r, 0]
+",
+"s = Segment[O,M]
+ShowLabel[s, true]
+SetVisibleInView[s, 1, true]
+SetLabelMode[s, 0]
+",
+"t = AngularBisector[N,O,M]
+ShowLabel[t, true]
+SetVisibleInView[t, 1, true]
+SetLabelMode[t, 0]
+",
+"P = (17.995270796971724, 14.444485048544992)
+ShowLabel[P, true]
+SetVisibleInView[P, 1, true]
+SetColor[P, ""#4d4dff""]
+SetLabelMode[P, 0]
+",
+"Q = (16.467065995433394, 10.762078520477568)
+ShowLabel[Q, true]
+SetVisibleInView[Q, 1, true]
+SetColor[Q, ""#4d4dff""]
+SetLabelMode[Q, 0]
+",
+"a = Segment[P,Q]
+ShowLabel[a, false]
+SetVisibleInView[a, 1, true]
+SetLabelMode[a, 0]
+",
+"R = (25.382716728940416, 10.895613963579642)
+ShowLabel[R, true]
+SetVisibleInView[R, 1, true]
+SetColor[R, ""#4d4dff""]
+SetLabelMode[R, 0]
+",
+"b = Segment[Q,R]
+ShowLabel[b, false]
+SetVisibleInView[b, 1, true]
+SetLabelMode[b, 0]
+",
+"c = Segment[R,P]
+ShowLabel[c, false]
+SetVisibleInView[c, 1, true]
+SetLabelMode[c, 0]
+",
+"S = Midpoint[b]
+ShowLabel[S, true]
+SetVisibleInView[S, 1, true]
+SetColor[S, ""#444444""]
+SetLabelMode[S, 0]
+SetPointSize[S, 4]
+",
+"d = OrthogonalLine[S,b]
+ShowLabel[d, false]
+SetVisibleInView[d, 1, true]
+SetLabelMode[d, 0]
+",
+"T = (-5.727194030098962, 27.00532145151095)
+ShowLabel[T, true]
+SetVisibleInView[T, 1, true]
+SetColor[T, ""#4d4dff""]
+SetLabelMode[T, 0]
+",
+"U = (-12.275691723030846, 21.132462409437117)
+ShowLabel[U, true]
+SetVisibleInView[U, 1, true]
+SetColor[U, ""#4d4dff""]
+SetLabelMode[U, 0]
+",
+"e = Segment[T,U]
+ShowLabel[e, false]
+SetVisibleInView[e, 1, true]
+SetLabelMode[e, 0]
+",
+"V = (-0.11419600758591965, 21.444295632910066)
+ShowLabel[V, true]
+SetVisibleInView[V, 1, true]
+SetColor[V, ""#4d4dff""]
+SetLabelMode[V, 0]
+",
+"f_1 = Segment[U,V]
+ShowLabel[f_1, false]
+SetVisibleInView[f_1, 1, true]
+SetLabelMode[f_1, 0]
+",
+"g_1 = Segment[V,T]
+ShowLabel[g_1, false]
+SetVisibleInView[g_1, 1, true]
+SetLabelMode[g_1, 0]
+",
+"h_1 = Line[T,U]
+ShowLabel[h_1, false]
+SetVisibleInView[h_1, 1, false]
+SetLabelMode[h_1, 0]
+",
+"text1 = Text[""altitudes""]
+ShowLabel[text1, false]
+SetVisibleInView[text1, 1, true]
+SetLabelMode[text1, 0]
+",
+"text2 = Text[""perpendicular bisector""]
+ShowLabel[text2, false]
+SetVisibleInView[text2, 1, true]
+SetLabelMode[text2, 0]
+",
+"text3 = Text[""midlines""]
+ShowLabel[text3, false]
+SetVisibleInView[text3, 1, true]
+SetLabelMode[text3, 0]
+",
+"i_1 = Segment[I,J]
+ShowLabel[i_1, false]
+SetVisibleInView[i_1, 1, true]
+SetLabelMode[i_1, 0]
+",
+"j_1 = Segment[H,K]
+ShowLabel[j_1, false]
+SetVisibleInView[j_1, 1, true]
+SetLabelMode[j_1, 0]
+",
+"text4 = Text[""medians""]
+ShowLabel[text4, false]
+SetVisibleInView[text4, 1, true]
+SetLabelMode[text4, 0]
+",
+"k_1 = AngularBisector[M,N,O]
+ShowLabel[k_1, false]
+SetVisibleInView[k_1, 1, true]
+SetLabelMode[k_1, 0]
+",
+"l_1 = AngularBisector[N,M,O]
+ShowLabel[l_1, false]
+SetVisibleInView[l_1, 1, true]
+SetLabelMode[l_1, 0]
+",
+"text5 = Text[""angle bisector""]
+ShowLabel[text5, false]
+SetVisibleInView[text5, 1, true]
+SetLabelMode[text5, 0]
+",
+"W = (-11.288219848699848, 26.953349247598794)
+ShowLabel[W, true]
+SetVisibleInView[W, 1, false]
+SetColor[W, ""#4d4dff""]
+SetLabelMode[W, 0]
+",
+"m_1 = Line[T,W]
+ShowLabel[m_1, false]
+SetVisibleInView[m_1, 1, false]
+SetLabelMode[m_1, 0]
+",
+"n_1 = OrthogonalLine[T,m_1]
+ShowLabel[n_1, false]
+SetVisibleInView[n_1, 1, true]
+SetLabelMode[n_1, 0]
+",

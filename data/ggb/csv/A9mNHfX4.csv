@@ -1,0 +1,141 @@
+ggbscript,prompt
+"a = Slider[-5, 5, 0.1, 1, 200, false, true, false]
+SetValue[a, 0.8]
+SetLineThickness[a, 10]
+ShowLabel[a, true]
+SetVisibleInView[a, 1, true]
+SetFilling[a, 0.10000000149011612]
+SetLabelMode[a, 1]
+",
+"h = Slider[-5, 10, 1, 1, 200, false, true, false]
+SetValue[h, -3]
+SetLineThickness[h, 10]
+ShowLabel[h, true]
+SetVisibleInView[h, 1, true]
+SetFilling[h, 0.10000000149011612]
+SetLabelMode[h, 1]
+",
+"k = Slider[-5, 10, 1, 1, 200, false, true, false]
+SetValue[k, -4]
+SetLineThickness[k, 10]
+ShowLabel[k, true]
+SetVisibleInView[k, 1, true]
+SetFilling[k, 0.10000000149011612]
+SetLabelMode[k, 1]
+",
+"f(x) = (a * (x - h)^(2)) + k
+ShowLabel[f, true]
+SetVisibleInView[f, 1, true]
+SetColor[f, ""#ff0000""]
+SetLabelMode[f, 1]
+SetLineThickness[f, 8]
+",
+"g : x = h
+ShowLabel[g, true]
+SetVisibleInView[g, 1, true]
+SetColor[g, ""#009900""]
+SetLabelMode[g, 2]
+SetLineThickness[g, 9]
+",
+"V = (h, k)
+ShowLabel[V, true]
+SetVisibleInView[V, 1, true]
+SetColor[V, ""#6600cc""]
+SetLabelMode[V, 1]
+SetPointSize[V, 7]
+SetPointStyle[V, 1]
+",
+"A = Intersect[f,yAxis]
+ShowLabel[A, true]
+SetVisibleInView[A, 1, true]
+SetColor[A, ""#ff33cc""]
+SetLabelMode[A, 2]
+SetPointSize[A, 7]
+SetPointStyle[A, 1]
+",
+"B = Intersect[f,xAxis]
+ShowLabel[B, true]
+SetVisibleInView[B, 1, true]
+SetColor[B, ""#00ffff""]
+SetLabelMode[B, 2]
+SetPointSize[B, 7]
+SetPointStyle[B, 1]
+",
+"text1 = FormulaText[""Vertex form: y= a(x-h)^2 +k""]
+ShowLabel[text1, false]
+SetVisibleInView[text1, 1, true]
+SetColor[text1, ""#ff0000""]
+SetLabelMode[text1, 0]
+",
+"text2 = Text[""Direction of opening: 
+a > 0 open upward
+a < 0 open downward""]
+ShowLabel[text2, false]
+SetVisibleInView[text2, 1, true]
+SetConditionToShowObject[text2, b]
+SetColor[text2, ""#0000ff""]
+SetLabelMode[text2, 0]
+",
+"text3 = Text[""Vertex = (h,k)""]
+ShowLabel[text3, false]
+SetVisibleInView[text3, 1, true]
+SetConditionToShowObject[text3, d]
+SetColor[text3, ""#7f00ff""]
+SetLabelMode[text3, 0]
+",
+"text4 = Text[""Axis of symmetry: x = h""]
+ShowLabel[text4, false]
+SetVisibleInView[text4, 1, true]
+SetConditionToShowObject[text4, c]
+SetColor[text4, ""#0000ff""]
+SetLabelMode[text4, 0]
+",
+"text5 = Text[""Optimum value:
+a > 0 so Minimum value of y = k
+a < 0 so Maximum value of y = k""]
+ShowLabel[text5, false]
+SetVisibleInView[text5, 1, true]
+SetConditionToShowObject[text5, e]
+SetColor[text5, ""#0000ff""]
+SetLabelMode[text5, 0]
+",
+"text6 = Text[""Can't show the x-intercept and y -intercept
+ in vertx form
+(a) Find x-intercept (Put y = 0 into the quadratic function)
+(b) Find y-intercept (Put = 0 into the quadratic function)""]
+ShowLabel[text6, false]
+SetVisibleInView[text6, 1, true]
+SetConditionToShowObject[text6, i]
+SetColor[text6, ""#0000ff""]
+SetLabelMode[text6, 0]
+",
+"b = false
+ShowLabel[b, true]
+SetVisibleInView[b, 1, true]
+SetLabelMode[b, 0]
+SetCaption[b, ""Direction of opening""]
+",
+"i = false
+ShowLabel[i, true]
+SetVisibleInView[i, 1, true]
+SetLabelMode[i, 0]
+SetCaption[i, ""x-intercept and y -intercept""]
+",
+"c = false
+ShowLabel[c, true]
+SetVisibleInView[c, 1, true]
+SetLabelMode[c, 0]
+SetCaption[c, ""Axis of symmetry""]
+",
+"d = false
+ShowLabel[d, true]
+SetVisibleInView[d, 1, true]
+SetLabelMode[d, 0]
+SetCaption[d, ""Vertex""]
+",
+"e = false
+ShowLabel[e, true]
+SetVisibleInView[e, 1, true]
+SetLabelMode[e, 0]
+SetCaption[e, ""Optimum (Max/Min) value""]
+",
