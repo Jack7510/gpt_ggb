@@ -372,7 +372,7 @@ sourceCommit 与 sourceDirty 仍描述本地开发基线，精确代码以归档
 
 ## 分段请求契约
 
-模型只通过 ggb_request 以最多 2 KiB 参数保存完整条目，并按 revision 局部修改。
+模型通过 ggb_request 一次提交完整 requestText；宿主注入原始 prompt，旧 section 操作仅保留底层兼容。
 check 接收 revision，build 接收 checkedRequestId；均不再接收完整 request。
 草稿组装和检查句柄由安装包 ./drafts 拥有，宿主只负责隔离、认证、串行准入及清理。
 契约、状态机和拒绝规则见[小块请求与已检查版本](../../docs/ggb-dsh-installed-plugin-design.md#27-小块请求与已检查版本)。

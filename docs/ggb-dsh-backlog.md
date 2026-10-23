@@ -31,7 +31,12 @@
 - Malformed response 安全重试（2026-10-23）：`MALFORMED_RESPONSE` 且无 `ggb_build`、证据未截断时重跑一次模型 turn；
   `hasBuildCall` 取代任意 tool call 保护，只读 inspect/check 可重复；新增 `plugin_core_malformed_response` 错误码。
   已有构建事实或第二次 malformed 仍失败关闭；宿主测试覆盖只读重试、build 阻断和错误码。
-- 小块请求、局部修复和引用式构建（2026-10-23）：安装插件新增 ggb_request，每次参数上限 2048 UTF-8 字节，
+- 单次完整 requestText（2026-10-23）：ggb_request 主路径改为一次提交完整 request body；
+  `requestText` 只含 plan/clarifications，宿主注入 prompt/locale/base，图片 transcription 使用独立小字段。
+  check 仍按 revision，build 仍使用 checkedRequestId；旧 section 操作保留为底层兼容。
+  目的是把大 JSON 从多次 section 往返降为一次请求，减少 revision 冲突和模型调用数。
+- 小块请求、局部修复和引用式构建（2026-10-23，兼容历史）：安装插件此前支持 ggb_request，每次参数上限 2048 UTF-8 字节，
+
   按完整条目追加、替换、删除和分页读取；原始 prompt 保留，图片文字可分段转写。
   check 检查完整组装请求并返回不可变检查句柄，build 使用该句柄；写入失败不改变版本，过期/跨 turn 句柄和并发版本冲突在构建配额预留前拒绝。
   成功修改同时撤销旧交付候选，防止未构建新草稿却交付旧文件；回执、可信交付及构造脚本绑定最终完整请求摘要。
@@ -39,7 +44,7 @@
   工具协议升级至 3，API/Worker 内部通道为 8，executor/执行上下文/回执仍为 3/2/2；开发 TGZ 与完整文件摘要锁已同步。
   草稿仅在当前认证 run/turn/epoch 内存中保存，关闭后不恢复、不自动重放。
   `MALFORMED_RESPONSE` 的安全重试只覆盖“证据未截断、没有 ggb_build”的 turn；只读 inspect/check 可重复，已有 build 不重放。
-  插件完整离线测试 141 项通过；宿主 674 项通过、5 项默认跳过。TypeScript、Client Vue/bundle、共享 lint、质量和工作区边界检查通过。
+  插件完整离线测试 175 项通过；宿主 683 项通过、5 项默认跳过。TypeScript、Client Vue/bundle、共享 lint、质量和工作区边界检查通过。
   最终 TGZ 在两个隔离真实 SDK Server 中发现准确四工具及 Worker Skill；Provider 请求 0、网络尝试 0、浏览器启动 0。
   证据：output/draft-plugin-tests.log、draft-offline-regression.log、draft-sdk/result.json 及其他 draft-*.log。
   本轮未调用真实 Provider、真实 GeoGebra 或部署生产；格式错误率、工具调用数与端到端耗时改善尚未实测。

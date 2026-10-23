@@ -254,47 +254,29 @@ SSE 提前结束或网络断开后，Client 只重连同一 run，使用当前�
 鉴权等永久错误不重试；取消监听立即停止等待。重连不重新创建任务，也不重放工具调用。
 已有生命周期终态仍由最终交付或失败/取消结算产生，工具进度不能改变终态。
 
-### 2.7 小块请求与已检查版本
+### 2.7 单次完整请求与已检查版本
 
-插件公开 `./drafts`，负责字段组装、版本及检查句柄。宿主在认证的 run/turn/epoch 中创建草稿实例，
-注入原始 prompt；图片文字可通过 transcription 分段追加，不能替换原始 prompt。宿主在该 run 的串行工具队列内调用。草稿保存在内存；关闭 turn 或进程退出后不恢复。
-它不接受文件路径，不提供 shell、网络或任意文件读写。每个 turn 最多一个草稿和一个有效检查句柄。
+插件公开 `./drafts`，负责一次完整请求的解析、版本及检查句柄。宿主在认证的
+run/turn/epoch 中创建草稿实例并注入原始 prompt；模型通过一次 `ggb_request`
+提交 `requestText`。`requestText` 只包含 `plan` 和可选 `clarifications`；
+locale、title、图片 transcription 作为同级小字段，原始 prompt、输出路径和 base
+始终由宿主注入，模型不能覆盖。
 
 | 操作 | 条件 | 结果 |
 | --- | --- | --- |
-| create | 尚无草稿；提供 locale，可选 title | revision=1；原始 prompt 由宿主注入 |
-| append | revision 等于当前值 | 追加完整条目，revision 加一 |
-| replace | revision 匹配且零起始 index 范围合法 | 等数量替换，其他条目保持不变，revision 加一 |
-| remove | revision 匹配；合法 index/count | 删除指定条目，revision 加一 |
-| read | revision 匹配；合法 section/index/count | 返回最多 2 KiB 条目页及 nextIndex/more；不改变版本 |
-| check | revision 匹配 | 组装完整领域请求，经原有 checker 成功后生成 UUID 检查句柄及摘要 |
+| request | requestText 为合法 JSON 对象，正文 ≤128 KiB | 保存完整请求并增加 revision；撤销旧检查句柄 |
+| check | revision 匹配 | 经原有完整 checker 成功后生成 UUID 检查句柄及完整请求摘要 |
 | build | 当前有效 checkedRequestId | 执行冻结副本，回执绑定该完整请求摘要 |
 
-每次工具参数最多 2048 UTF-8 字节，每批 1–8 个完整条目；草稿条目和组装后的完整请求各受 128 KiB 上限约束，
-最多 256 个 revision。超限不能截断、静默删除条件或切碎一个数学表达式。单条目超限时报告能力限制。
-requirements 只存 id/source/purpose；checks 独立条目带 requirementId，检查时按原顺序归组。
-program 使用 id/source，可选 mode/outputs/initial；组装时显式补齐 op=native 和默认 mode=algebra。
+一次成功 request 只增加一个 revision；写入失败不改变已有请求，也不产生部分状态。
+最多 256 个 revision；草稿仅保存在内存中，关闭 turn 或进程退出后不恢复，不自动重放。
+不接受文件路径、shell、网络或任意文件读写。旧 section 操作仅保留为底层兼容，
+不再出现在模型 schema 或 Worker Skill 中。
+
+requirements 保留 id/source/purpose 和完整 checks；program 使用 id/source，
+可选 mode/outputs/initial；组装时显式补齐 op=native 和默认 mode=algebra。
 CAS、initial、独立 expected（含嵌套数组）、原始来源、交互及呈现字段完整保留。
 孤立 check、重复 requirement、缺失 expected 或必需采样均不得通过最终完整检查。
-
-```mermaid
-stateDiagram-v2
-  [*] --> Absent
-  Absent --> Editing: create
-  Editing --> Editing: append / replace / remove
-  Editing --> Checked: complete check accepted
-  Checked --> Editing: any successful edit
-  Checked --> Editing: recheck begins
-  Checked --> Checked: build / read
-  Editing --> Editing: check rejected
-  Checked --> [*]: turn closed
-  Editing --> [*]: turn closed
-```
-
-写入失败保持版本和内容不变；同一 revision 的并发写只允许一个成功。任何成功修改或重新检查都会
-撤销旧检查句柄；成功修改同时撤销已有交付候选，未构建的新版本不能交付旧文件。跨 turn/run、未知、过期或已被修改的句柄在构建准入与配额预留之前拒绝。
-每次返回及执行均使用副本，外部修改不能改变已检查内容。组装快照、冻结快照和 executor 的完整请求摘要
-必须一致；成功回执、可信交付和构造脚本继续绑定该摘要。检查句柄不豁免 build 的完整核验。
 
 ## 3. 安装、兼容与运行资源契约
 
@@ -366,7 +348,7 @@ stateDiagram-v2
 | 工具 | 输入 | 正常结果 | 拒绝或失败 |
 | --- | --- | --- | --- |
 | ggb_inspect | 可选固定 reference 主题，无路径参数 | 省略参数返回基线对象；指定主题返回当前插件内的有界参考 | 无基线且未指定主题返回 base_missing；拒绝任意路径或 URL |
-| ggb_request | create/read/append/replace/remove，最多 2 KiB | 当前 revision、条目计数或有界分页 | 版本冲突、越界及超限拒绝，不改变已保存版本 |
+| ggb_request | 完整 requestText、locale/title/transcription；正文 ≤128 KiB | 当前 revision 和完整请求摘要；一次保存完整请求 | JSON 语法、宿主字段、大小或 revision 拒绝，不改变已保存版本 |
 | ggb_check | 当前 revision | 完整结构检查；成功返回 checkedRequestId 和完整请求摘要 | 返回具体字段路径和 issues；不启动浏览器、不证明几何成立 |
 | ggb_build | checkedRequestId | 有界核验摘要与宿主关联的结果标识 | 插件领域拒绝和执行故障分类返回；不得伪装成功 |
 
