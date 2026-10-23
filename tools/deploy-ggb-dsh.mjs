@@ -1,5 +1,6 @@
 /** Local source launcher; release files are never rewritten. */
-import { spawn } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
+import { promisify } from 'node:util'
 import { createHash, randomBytes } from 'node:crypto'
 import { createServer } from 'node:net'
 import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
@@ -103,7 +104,7 @@ export async function prepareOverlay(workspace, source, pinnedRoot, output) {
   return { root, privateWorkspace }
 }
 
-/** Own process groups for builds and servers; never signal unrelated listeners. */
+/** Own process groups for builds and servers after the explicit port cleanup. */
 export class Processes {
   children = new Set()
   stopping = false
@@ -139,6 +140,55 @@ export class Processes {
     signal('SIGKILL')
     await Promise.all(items.map(item => item.done))
   }
+}
+
+/** Inspect listening TCP sockets only; lsof exit 1 with no diagnostics means no match. */
+async function listeningPids(port) {
+  try {
+    const { stdout } = await promisify(execFile)('lsof', ['-nP', '-t', `-iTCP:${port}`, '-sTCP:LISTEN'],
+      { encoding: 'utf8', timeout: 5000 })
+    const pids = stdout.trim().split(/\s+/u).filter(Boolean).map(Number)
+    if (pids.some(pid => !Number.isSafeInteger(pid) || pid <= 0)) throw new Error('Invalid lsof PID output.')
+    return [...new Set(pids)]
+  } catch (error) {
+    if (error.code === 1 && !error.stdout?.trim() && !error.stderr?.trim()) return []
+    throw new Error(`Cannot inspect port ${port}: ${error.message}`)
+  }
+}
+
+/** Release only the selected listeners; never signal their entire process groups. */
+export async function releasePort(port, log = console.log, graceMs = 5000) {
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid TCP port.')
+  const owners = await listeningPids(port)
+  if (owners.includes(process.pid)) throw new Error(`Refusing to terminate this launcher on port ${port}.`)
+  const signal = (pids, name) => {
+    for (const pid of pids) {
+      log(`[deploy] port ${port}: ${name} PID ${pid}`)
+      try { process.kill(pid, name) } catch (error) { if (error.code !== 'ESRCH') throw error }
+    }
+  }
+  const remaining = async () => {
+    const current = await listeningPids(port)
+    if (current.some(pid => !owners.includes(pid))) throw new Error(`Port ${port} acquired a new listener during cleanup.`)
+    return current
+  }
+  signal(owners, 'SIGTERM')
+  let current = owners
+  const deadline = Date.now() + graceMs
+  while (current.length && Date.now() < deadline) {
+    await delay(100)
+    current = await remaining()
+  }
+  if (current.length) {
+    signal(await remaining(), 'SIGKILL')
+    const forcedDeadline = Date.now() + 2000
+    do {
+      await delay(100)
+      current = await remaining()
+    } while (current.length && Date.now() < forcedDeadline)
+  }
+  await assertPortFree(port)
+  log(`[deploy] port ${port}: available`)
 }
 
 export async function assertPortFree(port) {
@@ -184,7 +234,9 @@ Local development only. No release publishing, production deployment or model ta
   --pinned-root PATH  Complete installation matching the current vendor lock
   --help           Show this help
 REPO defaults to the script's repository. Default UI: http://localhost:5173
-Requires Node/pnpm, installed dependencies and a fully provisioned pinned runtime.
+Requires Node/pnpm/lsof, installed dependencies and a fully provisioned pinned runtime.
+Before building, stops TCP listeners on 8081 and 5173 (bundle: only 8081).
+Sends SIGTERM, waits up to 5s, then SIGKILL if needed. --build-only skips cleanup.
 Logs: $REPO/output/deploy-ggb-dsh/<unique-run>/. Ctrl-C stops all owned processes.
 Enter Provider Key only in page Settings. This script never reads .env or starts a model task.`)
     return
@@ -204,10 +256,6 @@ Enter Provider Key only in page Settings. This script never reads .env or starts
   await readFile(join(pinned, 'provisioned.json')).catch(() => {
     throw new Error('Missing pinned installation; run pnpm run provision:plugin-core in ggb-dsh first.')
   })
-  if (!config.buildOnly) {
-    await assertPortFree(8081)
-    if (!config.bundle) await assertPortFree(5173)
-  }
   const parent = join(config.repo, 'output/deploy-ggb-dsh')
   await mkdir(parent, { recursive: true, mode: 0o700 })
   const output = await mkdtemp(join(parent, 'run-'))
@@ -237,6 +285,21 @@ Enter Provider Key only in page Settings. This script never reads .env or starts
     if (exitCode !== 0 || processes.stopping) throw new Error(`${name} failed; inspect ${item.logPath}`)
   }
   try {
+    if (!config.buildOnly) {
+      const startedAt = new Date().toISOString()
+      const messages = []
+      let exitCode = 1
+      try {
+        for (const port of config.bundle ? [8081] : [8081, 5173]) {
+          await releasePort(port, message => { console.log(message); messages.push(message) })
+        }
+        exitCode = 0
+      } finally {
+        await writeFile(join(output, '00-release-ports.log'), messages.join('\n') + '\n', { mode: 0o600 })
+        stages.push({ name: '00-release-ports', startedAt, finishedAt: new Date().toISOString(), exitCode })
+        await save(join(output, 'stages.json'), stages)
+      }
+    }
     if (config.install) {
       await stage('01-install-plugin', source, 'pnpm', ['install', '--frozen-lockfile', '--ignore-scripts'])
       await stage('02-install-host', workspace, 'pnpm', ['install', '--frozen-lockfile', '--ignore-scripts'])
@@ -249,6 +312,9 @@ Enter Provider Key only in page Settings. This script never reads .env or starts
     if (config.doctor) await stage('07-doctor', overlay.root, process.execPath, ['dist/src/cli.js', 'doctor'])
     console.log(`plugin test root: ${overlay.root}; vendor release lock unchanged`)
     if (config.buildOnly) return
+    // A new listener may have appeared while building; do not start a partial server set.
+    await assertPortFree(8081)
+    if (!config.bundle) await assertPortFree(5173)
     const state = join(workspace, '.local/deploy')
     await mkdir(state, { recursive: true, mode: 0o700 })
     Object.assign(env, { PORT: '8081', GGB_V3_LISTEN_HOST: '127.0.0.1',

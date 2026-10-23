@@ -93,6 +93,11 @@ sh tools/deploy-ggb-dsh.sh --build-only   # 只构建和校验独立安装，不
 
 首次安装依赖时加 `--install`。`--doctor` 会额外启动本机 GeoGebra/浏览器，须按任务授权使用。
 脚本要求固定插件安装和 Client GeoGebra runtime 已供应；缺失时给出对应 provision 命令，不自动下载。
+启动模式会在构建前清理所需端口的 TCP 监听进程：默认清理 8081 和 5173，`--bundle` 只清理 8081。
+脚本通过 `lsof` 取得 PID，先发送 SIGTERM，等待最多 5 秒；仍占用时发送 SIGKILL，并确认端口可用。
+清理期间若出现新的监听 PID，脚本退出，不继续终止新进程。`--build-only` 不执行端口清理。
+清理日志保存在本次输出目录的 `00-release-ports.log`；构建完成后会再次检查端口。
+
 `REPO` 可覆盖仓库根；`--plugin PATH` 和 `--pinned-root PATH` 可覆盖插件源码及固定安装根。
 
 此入口使用独立开发安装和独立 workspace 中的派生锁，通过宿主现有完整性和兼容性校验。
@@ -100,7 +105,7 @@ sh tools/deploy-ggb-dsh.sh --build-only   # 只构建和校验独立安装，不
 依赖、插件版本或 runtime 身份改变时，脚本拒绝复用旧安装，须先按正式供应流程准备匹配组合。
 
 默认同时启动 API/Worker 和 Vite，打开 `http://localhost:5173`。bundle 模式打开 `http://127.0.0.1:8081`。
-端口固定为 8081/5173；已有监听时失败退出，不杀其他服务。`Ctrl-C` 停止脚本所属进程。
+端口固定为 8081/5173；启动前按上述规则终止占用所需端口的监听进程。`Ctrl-C` 停止脚本所属进程。
 脚本不读取 `.env`、不提交模型任务；Provider Key 在页面 Settings 中输入。
 
 分阶段日志、派生锁和安装身份保存在 `output/deploy-ggb-dsh/run-*/`，属于忽略目录。
