@@ -99,6 +99,14 @@ sh tools/deploy-ggb-dsh.sh --build-only   # 只构建和校验独立安装，不
 包摘要或安装身份不匹配时停止，不覆盖现有安装。供应或 doctor 失败时停止，不启动服务；分阶段日志保留在下述日志目录。
 并发供应由同级 `.provisioning` 目录互斥；强制结束后，确认没有供应进程再手工移除该目录并重试。
 Client GeoGebra runtime 仍需预先供应；缺失时提示执行 `pnpm run provision:geogebra`。
+构建 Client 前，启动器使用源码覆盖安装的公开 `runtime-compatibility` 入口准备 Client runtime。
+`04b-provision-client-compatibility.log` 记录该步骤。供应器检查原始或已修复文件的摘要；不匹配时停止。
+该步骤为两个固定版本补齐 Directrix 路径起点初始化，保留 `Point(d)` 和几何依赖。
+已供应的 Client runtime 可以原地复用；manifest 记录兼容补丁身份和修复后文件摘要。
+独立运行供应器时，先供应包含此公开入口的新插件，再运行 `provision:geogebra`。
+源码包尚未更新到 vendor 时，可传 `--plugin-root /absolute/development/installation`；旧安装不伪装成已修复安装。
+PWA 的 runtime 缓存升为 `ggb-runtime-v2`。新 Service Worker 激活时删除旧代缓存；
+新代首次下载绕过旧 HTTP 缓存，随后复用修复后的资源。已加载的旧 applet 需在刷新页面后重新创建。
 启动模式会在构建前清理所需端口的 TCP 监听进程：默认清理 8081 和 5173，`--bundle` 只清理 8081。
 脚本通过 `lsof` 取得 PID，先发送 SIGTERM，等待最多 5 秒；仍占用时发送 SIGKILL，并确认端口可用。
 清理期间若出现新的监听 PID，脚本退出，不继续终止新进程。`--build-only` 不执行端口清理。

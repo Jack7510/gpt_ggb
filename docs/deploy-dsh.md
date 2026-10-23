@@ -50,7 +50,7 @@ ggb-dsh-server container (non-root)
 ## 3. 构建与离线验证
 
 ```bash
-(cd ggb-dsh && pnpm install --frozen-lockfile && pnpm run provision:geogebra && pnpm run provision:plugin-core)
+(cd ggb-dsh && pnpm install --frozen-lockfile && pnpm run provision:plugin-core && pnpm run provision:geogebra)
 (cd ggb-dsh && pnpm run check)
 
 docker build -f ggb-dsh/deploy/container/Dockerfile \

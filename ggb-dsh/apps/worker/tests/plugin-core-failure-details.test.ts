@@ -21,6 +21,25 @@ async function directory() {
 afterEach(async () => { vi.restoreAllMocks(); for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true }) })
 
 describe('owned build failure projection', () => {
+  it('keeps the first initial error ahead of cascading checks and redacts its source', async () => {
+    const root = await directory()
+    const title = join(root, 'title'); await mkdir(title)
+    await writeFile(join(title, 'run.json'), JSON.stringify({ state: 'failed', error: {
+      code: 'execution_failed', message: 'Initial coordinates left point undefined: A',
+      details: { stage: 'execution_failed', cause: { stepId: 'A', source: 'A=Point(d) /Users/private/task',
+        operation: 'initial', expected: { outputs: ['A'], coordinates: [-1, 2] },
+        actual: { defined: false, objectType: 'point', moveable: true, x: null, y: null } },
+      run: '/Users/private/run' } } }))
+    await writeFile(join(title, 'verification.json'), JSON.stringify({ results: [
+      { checkId: '$canvas:0', status: 'failed', evidence: 'secondary undefined objects' },
+    ] }))
+    const result = await buildFailure(root, fallback, 'secondary cleanup error')
+    expect(result).toMatchObject({ code: 'execution_failed', message: 'Initial coordinates left point undefined: A',
+      details: { failures: [{ details: { cause: { stepId: 'A', operation: 'initial',
+        source: 'A=Point(d) [server_path]', expected: { coordinates: [-1, 2] },
+        actual: { defined: false, objectType: 'point', x: null, y: null } } } }] } })
+    expect(JSON.stringify(result)).not.toContain('/Users/private/')
+  })
   it('preserves structured receipt issues and CLI fallback when no report exists', async () => {
     const root = await directory()
     expect(await buildFailure(root, fallback, '', [{ code: 'invalid_input', message: 'dx/dy are screen pixels; length >= 20' }]))

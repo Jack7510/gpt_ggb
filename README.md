@@ -91,8 +91,8 @@ Plugin-core Server
 cd ggb-dsh
 pnpm install --frozen-lockfile --ignore-scripts
 # 缓存完整时，可用 pnpm run install:offline 替代上一条
-pnpm run provision:geogebra
 pnpm run provision:plugin-core
+pnpm run provision:geogebra
 ```
 
 然后打开两个终端，均进入 `ggb-dsh/`：

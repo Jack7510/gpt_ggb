@@ -370,9 +370,11 @@ Enter Provider Key only in page Settings. This script never reads .env or starts
     await stage('03-build-plugin', source, 'pnpm', ['build'])
     await stage('04-build-backend', workspace, 'pnpm', ['exec', 'tsc', '-b', 'apps/api', 'apps/worker'])
     await ensurePinnedInstallation(workspace, pinned, stage)
+    const overlay = await prepareOverlay(workspace, source, pinned, output)
+    await stage('04b-provision-client-compatibility', workspace, process.execPath,
+      ['tools/provision-geogebra.mjs', '--plugin-root', overlay.root])
     await stage('05-build-client', workspace, 'pnpm', ['exec', 'tsc', '-b', 'apps/client'])
     if (config.bundle) await stage('06-bundle', workspace, 'pnpm', ['--filter', '@ggb-copilot/client', 'run', 'bundle'])
-    const overlay = await prepareOverlay(workspace, source, pinned, output)
     if (config.doctor) await stage('07-doctor', overlay.root, process.execPath, ['dist/src/cli.js', 'doctor'])
     console.log(`plugin test root: ${overlay.root}; vendor release lock unchanged`)
     if (config.buildOnly) return

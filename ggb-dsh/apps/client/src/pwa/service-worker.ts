@@ -4,7 +4,8 @@
  * or retries run mutations.
  */
 export const SHELL_CACHE = 'ggb-shell-v1'
-export const RUNTIME_CACHE = 'ggb-runtime-v1'
+// New bytes at pinned engine URLs: retire the pre-path-origin-fix cache.
+export const RUNTIME_CACHE = 'ggb-runtime-v2'
 export const PUBLIC_CACHES = [SHELL_CACHE, RUNTIME_CACHE] as const
 
 export type CacheStrategy = 'immutable' | 'revalidate' | 'runtime' | 'network-only'
@@ -115,7 +116,10 @@ async function cacheFirst(request: Request, cacheName: string): Promise<Response
   const cache = await caches.open(cacheName)
   const cached = await cache.match(request)
   if (cached !== undefined) return cached
-  const response = await fetch(request)
+  // A new Cache Storage generation must not inherit old HTTP-cached engine
+  // fragments, whose URLs and upstream permutation names remain unchanged.
+  const response = await fetch(request,
+    cacheName === RUNTIME_CACHE ? { cache: 'reload' } : undefined)
   if (response.ok) await cache.put(request, response.clone())
   return response
 }

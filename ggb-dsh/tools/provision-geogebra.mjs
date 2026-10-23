@@ -1,24 +1,44 @@
+/** @fileoverview Supplies Client engine assets and verified plugin compatibility fixes. */
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { createRequire } from 'node:module'
+import { parseArgs } from 'node:util'
 
 const repositoryRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 const configuration = JSON.parse(await readFile(join(repositoryRoot, 'config', 'runtime-versions.json'), 'utf8'))
 // The applet document fetches `/geogebra/deployggb.js` from the Client origin, so the
 // runtime is provisioned into the Client public directory (§9/§10 migration of
 // `geogebra-runtime.ts` into `apps/client` resource resolution).
-const publicRoot = join(repositoryRoot, 'apps', 'client', 'public')
+const { values } = parseArgs({ options: {
+  'plugin-root': { type: 'string' }, 'public-root': { type: 'string' },
+} })
+const publicRoot = resolve(values['public-root'] ?? join(repositoryRoot, 'apps', 'client', 'public'))
 const targetRoot = join(publicRoot, 'geogebra')
 const manifestPath = join(publicRoot, 'geogebra-runtime-manifest.json')
+const lock = JSON.parse(await readFile(join(repositoryRoot, 'vendor/plugin-core.lock.json'), 'utf8'))
+const pluginRoot = resolve(values['plugin-root'] ?? join(repositoryRoot, '.plugin-core-runtime', lock.archiveSha256))
+const require = createRequire(join(pluginRoot, 'package.json'))
+let compatibilityModule
+try { compatibilityModule = require.resolve('ggb-plugins-dsh/runtime-compatibility') }
+catch { throw new Error('geogebra_compatibility_plugin_required: provision the updated plugin, or pass --plugin-root for a development installation') }
+if (!values['plugin-root']) {
+  const expected = lock.files['dist/src/runtime-compatibility.js']
+  const actual = createHash('sha256').update(await readFile(compatibilityModule)).digest('hex')
+  if (!expected || actual !== expected) throw new Error('geogebra_compatibility_plugin_integrity_mismatch')
+}
+const { prepareRuntimeCompatibility } = await import(pathToFileURL(compatibilityModule).href)
 
 if (existsSync(join(targetRoot, 'deployggb.js')) && existsSync(manifestPath)) {
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
   if (manifest.version === configuration.geogebra.version && manifest.archiveSha256 === configuration.geogebra.sha256) {
-    console.log(`GeoGebra ${manifest.version} is already provisioned.`)
+    const compatibility = await prepareRuntimeCompatibility(targetRoot, manifest.version)
+    writeFileSync(manifestPath, `${JSON.stringify({ ...manifest, compatibility }, null, 2)}\n`, { mode: 0o644 })
+    console.log(`GeoGebra ${manifest.version} is provisioned with ${compatibility.id}.`)
     process.exit(0)
   }
   throw new Error('geogebra_runtime_conflicts_with_configuration')
@@ -43,6 +63,7 @@ try {
     || !existsSync(join(extracted, 'GeoGebra', 'HTML5', '5.0', 'web3d', 'web3d.nocache.js'))) {
     throw new Error('geogebra_archive_layout_invalid')
   }
+  const compatibility = await prepareRuntimeCompatibility(join(extracted, 'GeoGebra'), configuration.geogebra.version)
   mkdirSync(dirname(targetRoot), { recursive: true })
   if (existsSync(targetRoot)) throw new Error('geogebra_vendor_directory_not_empty')
   // The archive nests the runtime under `GeoGebra/`; strip that level so the applet
@@ -53,6 +74,7 @@ try {
     version: configuration.geogebra.version,
     source: configuration.geogebra.source,
     archiveSha256: digest,
+    compatibility,
   }, null, 2)}\n`, { mode: 0o644 })
   console.log(`Provisioned GeoGebra ${configuration.geogebra.version} from its verified official archive.`)
 } finally {

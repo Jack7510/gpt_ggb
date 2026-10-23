@@ -7,7 +7,8 @@ import type { PluginCoreError } from './process-runner.js'
 
 const FIELDS = new Set(['code', 'message', 'stage', 'cause', 'details', 'issues', 'status',
   'requirementId', 'checkId', 'subjects', 'method', 'scope', 'evidence', 'expected', 'actual',
-  'object', 'field', 'reason', 'value', 'tolerance', 'expression', 'defined'])
+  'object', 'field', 'reason', 'value', 'tolerance', 'expression', 'defined',
+  'stepId', 'source', 'operation', 'outputs', 'coordinates', 'objectType', 'moveable', 'x', 'y'])
 
 /** Reports are data: discard paths, stacks, unrelated fields and large payloads. */
 function project(input: unknown, depth = 0): unknown {
