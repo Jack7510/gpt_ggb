@@ -62,7 +62,7 @@ docker build -f ggb-dsh/deploy/container/Dockerfile \
 runtime，并运行插件 `doctor`。两者都必须在 Docker build 前完成。
 
 运行镜像包含固定插件安装根、`vendor/plugin-core.lock.json`、`knowledge/` 与 `tools/`。
-Worker 校验包文件摘要和兼容组合后，从插件公开 server patch 加载三工具和 Worker Skill。
+Worker 校验包文件摘要和兼容组合后，从插件公开 server patch 加载四工具和 Worker Skill。
 旧宿主 profile、工具包和专属包装器已删除。将本次 release 的 Git revision、容器 image digest、`pnpm-lock.yaml`、
 `config/runtime-versions.json` 与 `vendor/plugin-core.lock.json` 一并留存在发布系统。
 
@@ -122,7 +122,7 @@ GGB_V3_DATABASE_URL='postgres://<user>:<password>@<db-host>:5432/<database>' \
 迁移 job 应用；它们不创建 Native 表。
 
 API 与 Worker 启动时通过 `assertPluginCoreSchema` 确认 ledger 已记录 018；缺失或 ledger 不存在时
-在监听前拒绝启动，不回退到 Native。API/Worker 必须一起升级至内部通道 6。生产保持 `GGB_V3_AUTO_MIGRATE=0`，避免 API 与 Worker 启动竞态。
+在监听前拒绝启动，不回退到 Native。API/Worker 必须一起升级至内部通道 8。生产保持 `GGB_V3_AUTO_MIGRATE=0`，避免 API 与 Worker 启动竞态。
 若迁移失败，停止发布，核对 ledger 与备份后按授权的恢复方案处置；不要通过修改 `schema_migrations`
 或跳过 migration 来强行启动服务。
 

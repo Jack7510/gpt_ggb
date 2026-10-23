@@ -122,6 +122,19 @@ describe('atomic plugin-core settlement', () => {
     })
   })
 
+  it('preserves malformed tool arguments as a specific failure code', async () => {
+    let resolve!: (result: ChannelPluginCoreResult) => void
+    const f = await fixture({ runPluginCore: () => new Promise(done => { resolve = done }) })
+    await until(async () => Boolean(resolve))
+    const result = finished(f.runId)
+    result.delivery = null
+    result.error = { code: 'plugin_core_malformed_response',
+      message: 'The model returned malformed tool arguments; no tool or build was executed.' }
+    resolve(result)
+    await until(async () => (await f.store.getRun(f.runId))?.phase === 'failed')
+    expect((await f.store.getRun(f.runId))?.failure?.code).toBe('plugin_core_malformed_response')
+  })
+
   it('preserves the no-delivery failure code and verification hint', async () => {
     let resolve!: (result: ChannelPluginCoreResult) => void
     const f = await fixture({ runPluginCore: () => new Promise(done => { resolve = done }) })

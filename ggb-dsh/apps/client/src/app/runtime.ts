@@ -1,5 +1,5 @@
 import { reconnectPluginStream } from '../runtime/reconnect-plugin-stream.js'
-import { titleFromPrompt } from '../sessions/session-title.js'
+import { titleFromFinalReport, titleFromPrompt } from '../sessions/session-title.js'
 import { failureMessage } from './failure-message.js'
 import { pluginCoreImageSchema, type PluginCoreImage, type PluginCoreBuildFailure, type PluginCoreConstructionRecord, pluginCoreDeliverySchema } from '@ggb-copilot/application/browser'
 import type { CanvasViews } from '../geogebra/view-settings.js'
@@ -550,6 +550,11 @@ export class ClientRuntime {
     await this.repository.updateRunBinding(binding.runId, {
       status: 'completed', delivery, assistantMessageId,
     })
+    const topic = titleFromFinalReport(view.finalResponse ?? '',
+      acceptedDelivery.construction?.text, this.options.presentationLocale)
+    if (topic.length > 0 && await this.sessions.applyTopicTitle(binding.sessionId, topic)) {
+      this.coordinator.publish('session_updated', binding.sessionId)
+    }
     this.coordinator.publish('messages_changed', binding.sessionId)
     this.changed(binding.sessionId)
   }

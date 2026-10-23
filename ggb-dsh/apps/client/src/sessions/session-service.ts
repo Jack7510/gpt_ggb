@@ -1,4 +1,4 @@
-import { DEFAULT_SESSION_TITLE, titleFromPrompt } from './session-title.js'
+import { DEFAULT_SESSION_TITLE, GENERIC_IMAGE_TITLES, titleFromPrompt } from './session-title.js'
 export { DEFAULT_SESSION_TITLE } from './session-title.js'
 import type { LocalCanvasBinding, LocalMessage, LocalMessageRole, LocalRunBinding, LocalConversationSession, SessionRepository, SessionSummary } from './session-repository.js'
 
@@ -66,6 +66,13 @@ export class SessionService {
     const title = titleFromPrompt(suggestedTitle, false, 'en')
     if (title.length === 0) return false
     return await this.deps.repository.applySuggestedTitle(sessionId, title, this.deps.now())
+  }
+
+  /** Replace the generic image fallback only after a completed run. */
+  public async applyTopicTitle(sessionId: string, suggestedTitle: string): Promise<boolean> {
+    const title = titleFromPrompt(suggestedTitle, false, 'en')
+    if (title.length === 0 || GENERIC_IMAGE_TITLES.has(title)) return false
+    return await this.deps.repository.applyTopicTitle(sessionId, title, this.deps.now())
   }
 
   /** Marks a Session as the last opened one without changing its content. */

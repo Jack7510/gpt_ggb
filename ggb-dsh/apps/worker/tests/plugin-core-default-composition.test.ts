@@ -23,7 +23,7 @@ describe('default installed composition', () => {
     expect(env).not.toHaveProperty('pluginCoreRunnerPath')
   })
 
-  it.skipIf(!pluginRoot)('routes API receipt-v1 through channel 4, installed SDK patch and a real plugin preflight (SDK mocked)', async () => {
+  it.skipIf(!pluginRoot)('routes API receipt-v1 through channel 8, installed SDK patch and a real plugin preflight (SDK mocked)', async () => {
     const temp = await mkdtemp(join(tmpdir(), 'default-installed-chain-'))
     const require = createRequire(join(pluginRoot!, 'package.json'))
     const { createTool } = await import(pathToFileURL(require.resolve('ggb-plugins-dsh/server')).href)
@@ -42,7 +42,14 @@ describe('default installed composition', () => {
           for (const [key, value] of Object.entries(options.env ?? {})) {
             if (key.startsWith('GGB_PLUGIN_CORE_TOOL_')) vi.stubEnv(key, value!)
           }
-          try { toolStatus = await createTool('ggb_check').execute({ request }, { signal: new AbortController().signal }) }
+          try {
+            const call = (name: string, args: unknown) => createTool(name).execute(args, { signal: new AbortController().signal })
+            await call('ggb_request', { action: 'create', locale: request.locale })
+            await call('ggb_request', { action: 'append', revision: 1, section: 'program', items: [{ id: 'P', source: 'P=(0,0)' }] })
+            await call('ggb_request', { action: 'append', revision: 2, section: 'requirements', items: [{ id: 'present', source: 'point P' }] })
+            await call('ggb_request', { action: 'append', revision: 3, section: 'checks', items: [{ requirementId: 'present', kind: 'exists', subjects: ['P'], scope: 'initial' }] })
+            toolStatus = await call('ggb_check', { revision: 4 })
+          }
           finally { vi.unstubAllEnvs() }
           return { finalResponse: 'mocked SDK completed; check only', events: [{ type: 'turn/end',
             data: { reason: { kind: 'completed' } } }] } as unknown as RunResult
@@ -57,7 +64,7 @@ describe('default installed composition', () => {
       await worker.start()
       const runId = runIdSchema.parse(`run_${randomUUID()}`)
       await api.createRun({ runId, runToken: 'test-token', idempotencyKey: runId,
-        providerKey: 'fake-provider-key', prompt: 'offline fixture', base: null, requestDigest: 'b'.repeat(64) })
+        providerKey: 'fake-provider-key', prompt: request.prompt, base: null, requestDigest: 'b'.repeat(64) })
       for (let n = 0; n < 200 && (await store.getRun(runId))?.phase !== 'failed'; n++) await new Promise(r => setTimeout(r, 20))
       expect((await store.getRun(runId))?.phase).toBe('failed') // a check cannot deliver
       expect((await store.getRun(runId))?.deliveryContract).toBe('receipt-v1')

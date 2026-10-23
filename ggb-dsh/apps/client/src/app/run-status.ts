@@ -31,7 +31,7 @@ export function describeRunStatus(
   return {
     tone: 'working',
     label: total === null ? text(locale, 'working') : `${text(locale, 'working')} · ${total}`,
-    detail: run.progress ? describeToolProgress(run.progress, locale) : text(locale, 'workingDetail'),
+    detail: run.progress ? describeToolProgress(run.progress, nowMs, locale) : text(locale, 'planningDetail'),
   }
 }
 
@@ -49,15 +49,26 @@ export function credentialRequiredNotice(hasProviderKey: boolean, locale: Presen
   return text(locale, hasProviderKey ? 'resumeReadyDetail' : 'keyRequiredNotice')
 }
 
-function describeToolProgress(progress: NonNullable<ProjectedRunState['progress']>, locale: PresentationLocale): string {
+function describeToolProgress(progress: NonNullable<ProjectedRunState['progress']>, nowMs: number,
+  locale: PresentationLocale): string {
   const zh = locale === 'zh-CN'
-  const tool = { ggb_inspect: zh ? '读取参考或基线' : 'Read reference or baseline',
+  const attempt = progress.attempt === undefined ? ''
+    : ` · ${zh ? '最近构建' : 'Last build'} ${progress.attempt}/${progress.limit}`
+  if (progress.tool === 'model') {
+    const started = Date.parse(progress.occurredAt)
+    const elapsedSeconds = progress.status === 'started' && Number.isFinite(started)
+      ? Math.max(0, Math.floor((nowMs - started) / 1_000)) : 0
+    const seconds = elapsedSeconds > 0 ? elapsedSeconds : null
+    const running = seconds === null ? '' : zh ? ` · 已运行 ${seconds}s` : ` · running ${seconds}s`
+    return `${zh ? '模型第' : 'Model step '}${progress.step}${zh ? '步' : ''} · ${
+      progress.status === 'started' ? zh ? '已开始' : 'Started' : zh ? '已结束，等待后续执行' : 'Finished; awaiting subsequent execution'}${attempt}${running}`
+  }
+  const tool = { ggb_request: zh ? '保存或读取请求草稿' : 'Save or read request draft', ggb_inspect: zh ? '读取参考或基线' : 'Read reference or baseline',
     ggb_check: zh ? '结构预检' : 'Structural check',
     ggb_build: zh ? '构造与核验' : 'Construction and verification' }[progress.tool]
-  const attempt = progress.status === 'started' && progress.attempt !== undefined
-    ? ` (${progress.attempt}/${progress.limit})` : ''
-  const status = { started: zh ? '调用中' : 'Running', accepted: zh ? '已接受工具结果' : 'Tool result accepted',
+  const status = { started: zh ? '调用中' : 'Running', accepted: zh ? '工具结果已接受' : 'Tool result accepted',
     rejected: zh ? '调用被拒绝，等待后续处理' : 'Call rejected; awaiting further processing',
-    failed: zh ? '调用异常，等待任务结算' : 'Call failed; awaiting task outcome' }[progress.status]
+    failed: zh ? '调用异常，等待任务结算' : 'Call failed; awaiting task outcome',
+    finished: '' }[progress.status]
   return `${tool}${attempt} · ${status}`
 }

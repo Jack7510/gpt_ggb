@@ -40,7 +40,7 @@ DSH 分发包为 `ggb-plugins-dsh`，Skill 为 `ggb-construction`。
 | 执行包装器（旧 `tools/plugin-core-runner.mjs`，已删除） | 调用内部 CLI 路径、解析报告、移动交付到固定目录 | 插件专属编排迁入插件，取消固定目录成功判定 |
 | [Worker service](../ggb-dsh/apps/worker/src/plugin-core/service.ts) | 读取固定 delivery；manifest 摘要可覆盖实际摘要 | 改为从已接受回执导入并检查产物 |
 | [API run service](../ggb-dsh/apps/api/src/plugin-core/run-service.ts) | 完成调用仅特别处理 cancelled | 明确处理 conflict，禁止覆盖并发终态 |
-| [插件 DSH 入口](../ggb-plugins/dsh/index.js) | 仅向 skills 注册候选 Skill，注入 CLI 路径 | 直接安装当前包不能替代受限三工具链路 |
+| [插件 DSH 入口](../ggb-plugins/dsh/index.js) | 仅向 skills 注册候选 Skill，注入 CLI 路径 | 直接安装当前包不能替代受限四工具链路 |
 | [插件 package](../ggb-plugins/dsh/package.json) | 本地版本 0.8.3，声明 DSH >=0.2.1-rc.2 | 需要重新选择并验证兼容组合 |
 | [宿主 runtime 配置](../ggb-dsh/config/runtime-versions.json)、[供应锁](../ggb-dsh/vendor/plugin-core.lock.json) | DSH 0.2.0-rc.2，供应插件 0.8.0 | 不能假设当前版本可直接组合 |
 
@@ -59,7 +59,8 @@ DSH 分发包为 `ggb-plugins-dsh`，Skill 为 `ggb-construction`。
 
 不增加 ACP、长驻会话池、新 Agent Pipeline、通用插件市场或通用执行框架。不恢复 Native 阶段、
 旧 checkpoint 或自动重放。不增加因网络中断、SDK 异常或进程退出触发的构建重试。
-当前空 turn 例外不能扩展为失败重放；浏览器 SSE 重连仍只读取事实。
+唯一例外是 `MALFORMED_RESPONSE` 且证据未截断、尚未调用 `ggb_build` 时，允许重跑一次模型 turn；
+只读的 inspect/check 可以重复，已经调用 build 或已有构建事实的 turn 不重放。浏览器 SSE 重连仍只读取事实。
 
 ## 2. 目标架构与职责
 
@@ -78,7 +79,7 @@ flowchart TB
   end
   subgraph Harness[每任务隔离的 DSH SDK Server]
     Agent[Agent 与 Provider 调用]
-    Adapter[安装包入口：三工具与 Worker Skill]
+    Adapter[安装包入口：四工具与 Worker Skill]
   end
   subgraph Exec[受控插件执行进程]
     Executor[同一安装包的执行入口]
@@ -106,12 +107,12 @@ API 与 Worker 继续作为现有部署组件。图中的插件两个入口属�
 
 | 责任 | 所有者 | 消费方及限制 |
 | --- | --- | --- |
-| 三个工具的参数、说明、模型反馈 | 插件 | DSH；工具名保持 ggb_inspect / ggb_check / ggb_build |
+| 四个工具的参数、说明、模型反馈 | 插件 | DSH；工具名保持 ggb_inspect / ggb_request / ggb_check / ggb_build |
 | Worker Skill、领域请求 schema、几何与重载核验 | 插件 | 宿主不得维护第二份领域规则 |
 | CLI 编排、文件命名、核验报告、交付清单 | 插件 | 宿主通过公开执行及报告契约消费 |
 | 模型循环与 SDK 通知 | DSH | Worker 管理启动、超时、关闭与有界采集 |
 | 运行身份、capability、build 配额、deadline | 宿主 | 插件不能自行延长 deadline、增加额度或变更身份 |
-| SDK 权限 overlay、最终工具白名单和执行守卫 | 宿主 | 配置在插件 patch 后应用；缺少或超出三工具集合时在模型请求前拒绝 |
+| SDK 权限 overlay、最终工具白名单和执行守卫 | 宿主 | 配置在插件 patch 后应用；缺少或超出四工具集合时在模型请求前拒绝 |
 | 基线字节、输出目录、进程树 | 宿主 | 插件只取得本次授权资源；输入基线不得被覆盖 |
 | API 鉴权、幂等、SSE、终态、TTL | API 与现有 Store | 插件不访问宿主数据库、run token 或 HTTP 管理接口 |
 | 产物字节校验、接收与存储 | 宿主 | 插件声明摘要不能覆盖宿主计算值 |
@@ -120,7 +121,7 @@ API 与 Worker 继续作为现有部署组件。图中的插件两个入口属�
 
 ### 2.2 插件的两个适配入口
 
-当前桌面入口可继续通过 skills 服务提供 Skill。新增服务端入口必须注册三工具，加载包内 Worker Skill，
+当前桌面入口可继续通过 skills 服务提供 Skill。新增服务端入口必须注册四工具，加载包内 Worker Skill，
 调用认证宿主网关。两入口共享 schema、构造与核验实现，不复制领域管线。
 
 领域 Prompt 由插件拥有；宿主只提供本次是否附带基线等可信任务事实。服务端所需 Skill 应当在开始模型
@@ -148,7 +149,7 @@ Client → API → 认证内部通道 → Worker → SDK 的创建任务请求�
 创建任务失败时保留草稿。创建成功时只清除该次发送的附件，不能清除其他会话或后续选择的图片。
 仅图片输入使用界面语言的默认构图指令；普通文字粘贴保持浏览器行为。
 
-此恢复不恢复 Native 引擎，也不变更插件三工具契约。API 和 Worker 必须同时更新到支持可选 `image`
+此恢复不恢复 Native 引擎，也不变更插件四工具契约。API 和 Worker 必须同时更新到支持可选 `image`
 字段的宿主版本；旧 Worker 的严格 schema 不接受此字段。离线测试覆盖传输和 SDK 内容块，真实
 Provider 是否接受图片以及识图质量仍须独立验收；本轮不调用真实 Provider。
 
@@ -183,15 +184,20 @@ Markdown，并保留数学运算符；最多 32 个用户可见字符。仅图�
 “Image construction”。既有历史会话不做批量回填。
 
 标题采用 IndexedDB 单个 readwrite 事务更新。手工改名记录 `titleSource: manual`，自动命名记录
-`titleSource: automatic`；字段缺失的历史默认标题仍可识别。更新后广播现有 `session_updated` 事件。
+`titleSource: automatic`；字段缺失的历史默认标题仍可识别。通用图片指令先回退为“图片构图”，
+完成后若最终报告或 accepted request 给出题目主题，则只升级这类自动图片标题；手工标题永不覆盖。
+更新后广播现有 `session_updated` 事件。
 
 | 当前状态 | 事件 | 结果 |
 | --- | --- | --- |
 | 默认标题、未标记来源 | 首条用户消息写入 | 设置自动标题 |
+| 自动图片标题 | 成功交付后的主题提取 | 升级为题目标题 |
 | 自动标题 | 后续消息或迟到建议 | 保留标题 |
 | 任意现存会话 | 手工改名 | 设置手工标题，包括手工输入“新会话” |
 | 手工标题 | 自动建议 | 保留手工标题 |
 | 会话已删除 | 迟到建议 | 忽略，不重新创建会话 |
+
+自动标题保留数学表达式中的中英文逗号和冒号，包括坐标、命令参数及列表；长度上限和手工标题优先规则保持不变。
 
 Worker 在成功回执、产物字节和核验报告完成校验后，从本次 accepted request 生成 `construction`。
 该字段由宿主生成，随交付原子保存，不增加插件 receipt 的 artifact，也不改变插件产物清单。
@@ -200,30 +206,40 @@ Worker 在成功回执、产物字节和核验报告完成校验后，从本次 
 | --- | --- |
 | `schemaVersion / origin` | 固定为 `1 / host-accepted-build` |
 | `buildId / domainRequestDigest / baseSha256` | 必须与本次 trustedBuild.binding 一致；缺少绑定或替换绑定时拒绝提交 |
-| `text` | UTF-8 文本，最大 256 KiB；保留构造步骤顺序、Algebra/CAS 模式、声明输出和初始值，以及 updates、edits、styles、view、display |
+| `text` | UTF-8 可执行 GGB 命令，最大 256 KiB；只保留构造步骤顺序，可含 native source、freePoint 和 command 的等价命令 |
 
+CAS 步骤从本次已核验报告的 construction 对象读取实际表达式，输出对象赋值；已有函数声明保留原声明。
+它记录实际物化结果，不把 CAS 命令直接当作代数区命令重放。独立数字、布尔值或点缺少 XML 表达式时，可用报告中的常量事实赋值；禁止用当前值替代依赖定义。
+缺失 CAS 物化证据时省略整个可选脚本，避免交付不完整脚本。
+每个带 `initial` 的步骤后紧随 `SetCoords(id,x,y)`，再输出下一构造步骤，保留点的约束关系和初始位置。
 记录不包含核验 checks、交互测试、完整基线或宿主文件路径。基线任务只记录本次增量，并标明基线摘要。
-记录是构造输入与修改记录，不是可以直接整段重放的 GGB Script。
-Client 将记录保存到对应 run 的本地交付，在该 run 的最终报告下按纯文本显示；复制和下载使用同一原文。
-下载格式为 UTF-8 `.txt`。切换会话或离线重开保留已保存记录，历史无记录交付不显示记录控件。
+记录文本只含可粘贴到 GGB 输入的命令，不包含技术元数据、样式、视图或显示模式；无命令或超过
+256 KiB 时省略该可选字段，不影响已成功的交付。Client 将记录保存到对应 run 的本地交付，在该 run
+的最终报告下以“GGB 构造脚本”显示；复制和下载使用同一命令原文。下载格式为 UTF-8 `.txt`。
+切换会话或离线重开保留已保存记录，历史无记录交付不显示记录控件。
 
 宿主和前端应同步更新；新增字段沿用 JSON 持久化，无新增数据库 DDL。
 
-### 2.6 工具级真实进度
+### 2.6 SDK 模型与工具级真实进度
 
-Worker 网关在实际调用三工具时发布进度。API 将进度写入 run 事件；SSE 读取持久事件。
-Client 只显示最近一次已观察到的工具事实，不使用时间轮换阶段或完成百分比。
+Worker 只从当前 SDK session 的实时 `step/start`、`step/end` 通知及四工具的实际调用发布进度。
+SDK 返回的历史事件仅用于诊断，不补发为实时进度。重复、倒退、错误 session、无开始的结束及关闭后的通知被忽略。
+API 将进度写入 run 事件；SSE 读取持久事件。Client 显示最近一次执行事实；时间只影响已运行时长，不能产生阶段或完成百分比。
 
 | 事实来源 | 显示内容 | 不变量 |
 | --- | --- | --- |
+| 尚无执行事实 | 等待执行事件 | 不声称模型已开始规划 |
+| SDK `step/start / step/end` | 模型第 N 步已开始 / 已结束，等待后续执行 | 必须匹配当前 session 和合法步号；不展示模型原文 |
 | `ggb_inspect` 调用与返回 | 读取参考或基线 | 不推断模型已理解题目 |
 | `ggb_check` 调用与返回 | 结构预检 | 不声称浏览器已经启动 |
+| `ggb_build` 拒绝/接受 | 调用被拒绝，等待后续处理 / 工具结果已接受 | 不据此声称模型正在修复或宿主正在交付 |
 | 获得配额后的 `ggb_build` 调用 | 构造与核验、配额槽位 `attempt/limit` | 不拆分没有独立事件的核验、重载与导出阶段 |
 | 工具返回或抛错 | `accepted / rejected / failed` | 拒绝只表示等待后续处理，不声称模型正在修复 |
 
-内部通道 6 在同一个已认证 run 连接上发送 `plugin-core.progress`，绑定原始 `requestId`、`runId`。
-握手请求和应答均要求版本 6；API、Worker 与兼容锁必须一起升级。进度帧不能完成最终结果 waiter。
-字段仅包含工具名、状态、宿主生成的调用 ID、可选构建 ID/配额及时间、顺序号，不携带参数或模型原文。
+内部通道 8 在同一个已认证 run 连接上发送 `plugin-core.progress`，绑定原始 `requestId`、`runId`。
+握手请求和应答均要求版本 8；API、Worker 与兼容锁必须一起升级。进度帧不能完成最终结果 waiter。
+字段仅包含事实来源（`model` 或工具名）、状态、宿主调用 ID、可选 SDK 步号、构建 ID/配额及时间、顺序号。
+模型事实只允许 `started / finished` 且必须带步号；工具事实不允许步号或 `finished`。不携带参数或模型原文。
 每 run 最多发布 128 条。未知字段、非法状态、错误 run、重复或倒退的顺序号被忽略。
 连接积压超过 64 KiB 时丢弃进度；进度观察异常不改变工具执行结果。
 
@@ -231,10 +247,54 @@ Store 在运行状态、未请求停止且顺序号递增时原子接收进度�
 SQLite 使用既有写事务；completed、failed、cancelled 后不再追加进度。
 进度沿用事件 JSON，无新增数据库 DDL。
 
-`plugin_core.ready.run.progress` 包含快照游标覆盖的最新工具事实。Client 忽略其他 run、旧游标及终态后事件。
+`plugin_core.ready.run.progress` 包含快照游标覆盖的最新执行事实。构建返回和执行异常帧带齐本次 `buildId / attempt / limit`，后续模型、inspect 和 check 事实携带最近构建信息。
+超额拒绝只保留最近槽位次数，不继承前次构建身份，不产生第四次构建。前端以“最近构建 N/M”表示槽位，退款后可以复用同一槽位；该值不是已消费配额。
+重连快照不依赖浏览器上一帧补齐次数。Client 忽略其他 run、旧游标及终态后事件。
 SSE 提前结束或网络断开后，Client 只重连同一 run，使用当前游标；最多重试 4 次，等待 0.5、1、2、4 秒。
 鉴权等永久错误不重试；取消监听立即停止等待。重连不重新创建任务，也不重放工具调用。
 已有生命周期终态仍由最终交付或失败/取消结算产生，工具进度不能改变终态。
+
+### 2.7 小块请求与已检查版本
+
+插件公开 `./drafts`，负责字段组装、版本及检查句柄。宿主在认证的 run/turn/epoch 中创建草稿实例，
+注入原始 prompt；图片文字可通过 transcription 分段追加，不能替换原始 prompt。宿主在该 run 的串行工具队列内调用。草稿保存在内存；关闭 turn 或进程退出后不恢复。
+它不接受文件路径，不提供 shell、网络或任意文件读写。每个 turn 最多一个草稿和一个有效检查句柄。
+
+| 操作 | 条件 | 结果 |
+| --- | --- | --- |
+| create | 尚无草稿；提供 locale，可选 title | revision=1；原始 prompt 由宿主注入 |
+| append | revision 等于当前值 | 追加完整条目，revision 加一 |
+| replace | revision 匹配且零起始 index 范围合法 | 等数量替换，其他条目保持不变，revision 加一 |
+| remove | revision 匹配；合法 index/count | 删除指定条目，revision 加一 |
+| read | revision 匹配；合法 section/index/count | 返回最多 2 KiB 条目页及 nextIndex/more；不改变版本 |
+| check | revision 匹配 | 组装完整领域请求，经原有 checker 成功后生成 UUID 检查句柄及摘要 |
+| build | 当前有效 checkedRequestId | 执行冻结副本，回执绑定该完整请求摘要 |
+
+每次工具参数最多 2048 UTF-8 字节，每批 1–8 个完整条目；草稿条目和组装后的完整请求各受 128 KiB 上限约束，
+最多 256 个 revision。超限不能截断、静默删除条件或切碎一个数学表达式。单条目超限时报告能力限制。
+requirements 只存 id/source/purpose；checks 独立条目带 requirementId，检查时按原顺序归组。
+program 使用 id/source，可选 mode/outputs/initial；组装时显式补齐 op=native 和默认 mode=algebra。
+CAS、initial、独立 expected（含嵌套数组）、原始来源、交互及呈现字段完整保留。
+孤立 check、重复 requirement、缺失 expected 或必需采样均不得通过最终完整检查。
+
+```mermaid
+stateDiagram-v2
+  [*] --> Absent
+  Absent --> Editing: create
+  Editing --> Editing: append / replace / remove
+  Editing --> Checked: complete check accepted
+  Checked --> Editing: any successful edit
+  Checked --> Editing: recheck begins
+  Checked --> Checked: build / read
+  Editing --> Editing: check rejected
+  Checked --> [*]: turn closed
+  Editing --> [*]: turn closed
+```
+
+写入失败保持版本和内容不变；同一 revision 的并发写只允许一个成功。任何成功修改或重新检查都会
+撤销旧检查句柄；成功修改同时撤销已有交付候选，未构建的新版本不能交付旧文件。跨 turn/run、未知、过期或已被修改的句柄在构建准入与配额预留之前拒绝。
+每次返回及执行均使用副本，外部修改不能改变已检查内容。组装快照、冻结快照和 executor 的完整请求摘要
+必须一致；成功回执、可信交付和构造脚本继续绑定该摘要。检查句柄不豁免 build 的完整核验。
 
 ## 3. 安装、兼容与运行资源契约
 
@@ -256,7 +316,7 @@ SSE 提前结束或网络断开后，Client 只重连同一 run，使用当前�
 | requestProtocolVersion | 插件领域请求版本；本方案保持 2 | 插件结构校验 |
 | receiptSchemaVersion | 本文第 5 节，版本 2 | 回执与持久化消费方 |
 | serverAdapter / executor / schemas | 包的公开入口，必须解析到同一安装版本 | DSH loader / 宿主 runner |
-| modelFacingTools | 三工具的准确列表 | 服务端工具发现检查 |
+| modelFacingTools | 四工具的准确列表 | 服务端工具发现检查 |
 | workerSkillSha256 / runtimeIdentity | Skill 摘要；GeoGebra、Playwright 版本及可用摘要 | 启动校验、回执关联 |
 
 发布锁覆盖发行包与 runtime；可写 setup 产物必须能对照 runtime 锁检查，不能仅凭 doctor 标记认定完整。
@@ -292,12 +352,12 @@ SSE 提前结束或网络断开后，Client 只重连同一 run，使用当前�
 | 边界 | 所有者 | 输入与输出 |
 | --- | --- | --- |
 | 领域请求 protocol 2 | 插件 | 模型提供构图请求；插件返回结构问题与核验事实 |
-| 工具到宿主协议 version 2 | 插件发布 schema；宿主维护授权策略 | 认证调用、宿主分配的执行上下文、调用结果 |
+| 工具到宿主协议 version 3 | 插件发布 schema；宿主维护授权策略 | 认证调用、宿主分配的执行上下文、调用结果 |
 | 宿主到执行器 envelope 3 | 插件 | check/inspect/build 响应、操作和上下文绑定、数据 schema、preflight/execution 阶段；上下文仍为版本 2 |
 | API/Worker 和 Client/API | 宿主 | 保留现有 run、SSE、产物协议；内部字段变化按版本规则升级 |
 
-现有工具网关使用 version 1。目标契约改变执行与回执安全语义，必须显式升级至 version 2，不能在原版本
-中静默改变含义。领域请求的数字 2 与宿主协议的数字 2 分属不同协议。
+工具网关当前使用 version 3，拒绝 version 1/2。模型参数已从完整 request 改为分段草稿与检查句柄，不能与旧安装包混用。
+领域请求和执行上下文仍为 2；executor 为 3，receipt 为 2。
 执行入口不必破坏桌面 CLI 的现有 envelope；应当提供明确的服务端公开入口。
 未知版本拒绝，不猜测降级；删除旧入口时同步清理仅为旧入口存在的测试。
 
@@ -306,25 +366,26 @@ SSE 提前结束或网络断开后，Client 只重连同一 run，使用当前�
 | 工具 | 输入 | 正常结果 | 拒绝或失败 |
 | --- | --- | --- | --- |
 | ggb_inspect | 可选固定 reference 主题，无路径参数 | 省略参数返回基线对象；指定主题返回当前插件内的有界参考 | 无基线且未指定主题返回 base_missing；拒绝任意路径或 URL |
-| ggb_check | 一份 request protocol 2 | 结构检查结果 | 返回具体字段路径和 issues；不启动浏览器、不证明几何成立 |
-| ggb_build | 一份 request protocol 2 | 有界核验摘要与宿主关联的结果标识 | 插件领域拒绝和执行故障分类返回；不得伪装成功 |
+| ggb_request | create/read/append/replace/remove，最多 2 KiB | 当前 revision、条目计数或有界分页 | 版本冲突、越界及超限拒绝，不改变已保存版本 |
+| ggb_check | 当前 revision | 完整结构检查；成功返回 checkedRequestId 和完整请求摘要 | 返回具体字段路径和 issues；不启动浏览器、不证明几何成立 |
+| ggb_build | checkedRequestId | 有界核验摘要与宿主关联的结果标识 | 插件领域拒绝和执行故障分类返回；不得伪装成功 |
 
 参数必须闭合；模型不能提供 outputDir、base 路径、运行身份、配额或凭据。工具结果中的对象名称、
 定义与文字均按不可信数据呈现。模型不接收内部路径和完整诊断，简短反馈必须保留可修正的问题。
-build 内部必须自行结构校验，不能要求之前的 check 作为授权凭证。
+模型入口要求当前已检查版本的句柄；build 内部仍自行完成结构、构造、重载及交互核验。句柄不是成功凭证，也不是执行授权；授权仍由宿主 capability 提供。
 
 ### 4.3 认证调用与宿主上下文
 
 | 字段 | 类型与来源 | 不变量 |
 | --- | --- | --- |
-| protocolVersion | 字面量 2 | 接收端精确校验 |
+| protocolVersion | 工具 envelope 字面量 3；执行上下文仍为 2 | 接收端精确校验 |
 | requestId / toolCallId | 适配层生成的 UUID v4 | 全链保留；若 SDK 可提供调用身份，另建映射，不伪称二者相同 |
 | runId / turnId / epoch | 宿主提供；沿用现有标识格式与正整数 epoch | 必须匹配当前有效 capability |
-| toolName | 三工具枚举 | 非白名单操作在启动子进程前拒绝 |
-| arguments / argumentsDigest | 领域参数及其 canonical JSON 的 SHA-256 | 校验原始调用参数，不能用摘要代替参数校验 |
+| toolName | 四工具枚举 | 非白名单操作在启动子进程前拒绝 |
+| arguments / argumentsDigest | 原始工具参数及其 canonical JSON 的 SHA-256 | 校验原始调用参数，不能用摘要代替参数校验 |
 | issuedAt / nonce / authentication | 沿用现有时间窗、随机 nonce 和 HMAC 签名规则 | 签名覆盖整个未签名 envelope；验证后才执行；令牌不持久化 |
 | buildId | 宿主为每次接受的 build 生成 UUID v4 | 模型不能指定；和 requestId 一对一关联 |
-| domainRequestDigest | 宿主对实际传给插件的领域请求计算 canonical JSON SHA-256 | 排除宿主路径与身份；不做隐式改写；不同于 API requestDigest 和 argumentsDigest |
+| domainRequestDigest | 宿主对实际传给插件的领域请求计算 canonical JSON SHA-256 | 排除宿主路径与身份；草稿按公开契约补齐 native op、默认代数模式和可信元数据后计算；执行期间不得再改写；不同于 API requestDigest 和 argumentsDigest |
 | baseRef / baseSha256 | 宿主提供的本次基线引用与摘要，均可为 null | 同时存在或同时为空；执行前检查实际字节；禁止插件覆盖输入 |
 | outputRoot / deadline | 宿主独立目录与绝对截止时间 | 插件不能扩权或延长；实际预算取 run 和操作预算较早者 |
 
@@ -521,7 +582,7 @@ stateDiagram-v2
 ### 7.1 提交与竞争
 
 创建 run 时必须固定 deliveryContract（legacy 或 receipt-v1）。receipt-v1 缺少回执时必须拒绝，
-不能依据结果字段是否存在来回退到 legacy。迁移 018 持久化此字段；内部通道 6 贯通该值与清理确认及统一大小上限；旧通道在握手阶段拒绝。
+不能依据结果字段是否存在来回退到 legacy。迁移 018 持久化此字段；内部通道 8 贯通该值与清理确认及统一大小上限；旧通道在握手阶段拒绝。
 Store 必须校验 bytes、sizeBytes、sha256 及交付引用一致；回执必须绑定已接受调用，不能仅存一个外部
 传入的 ok:true。Worker 的可信接收与 Store 的数据一致性检查分别存在，Store 不执行几何核验。
 构建调用记录、回执、清理证据的必要关联须扩展现有 plugin-core store，不建立第二套 run store。
@@ -583,7 +644,7 @@ flowchart LR
 
 | 批次 | 工作范围 | 退出条件 |
 | --- | --- | --- |
-| A | 固定插件公开入口、协议 schema、错误映射、SDK/runtime 组合；确定安装描述和迁移字段 | 仓库外安装包可在目标 SDK 下初始化并发现三工具及 Worker Skill；不调用 Provider；未知版本明确拒绝 |
+| A | 固定插件公开入口、协议 schema、错误映射、SDK/runtime 组合；确定安装描述和迁移字段 | 仓库外安装包可在目标 SDK 下初始化并发现四工具及 Worker Skill；不调用 Provider；未知版本明确拒绝 |
 | B | 先补当前链路失败证据与调用身份；插件新增工具入口并接收宿主上下文 | SDK 中途异常、工具拒绝都有可关联证据；凭据不泄露；采集预算固定；未切换默认入口 |
 | C | 构建回执、独立目录、候选选择、产物接收、Store 原子提交、取消和树清理一起闭环 | 失败/篡改/迟到结果不能完成；清理未确认不能复用槽位；三种 Store 行为一致 |
 | D | 将默认 SDK 配置切到安装插件；移除宿主重复工具及专属包装器；修改供应与部署资产 | 运行不需要插件源码/相邻 checkout/Codex 缓存；清理无消费者入口；定向及集成检查通过 |
@@ -601,7 +662,7 @@ flowchart LR
 
 | ID | 场景与操作 | 可观察通过条件 | 验证层 |
 | --- | --- | --- | --- |
-| AC-01 | 仓库外安装精确发行包，隐藏插件源码与其他客户端缓存 | 插件完整就绪；SDK 初始化、三工具发现和 Worker Skill 加载成功 | 安装与 SDK，无 Provider |
+| AC-01 | 仓库外安装精确发行包，隐藏插件源码与其他客户端缓存 | 插件完整就绪；SDK 初始化、四工具发现和 Worker Skill 加载成功 | 安装与 SDK，无 Provider |
 | AC-02 | DSH/协议不兼容、Skill/CLI 混版、runtime 缺失 | Provider 调用前拒绝；返回具体安装/兼容错误 | 离线 |
 | AC-03 | 删除一个已结束任务的临时 home，再创建新任务 | 安装根不变，新任务可加载同一插件；目录不串用 | 离线与 SDK |
 | AC-04 | 错误签名、旧 epoch、重复 nonce/requestId、模型注入路径 | 不启动执行器、不增加构建副作用；拒绝证据可关联 | 网关 |

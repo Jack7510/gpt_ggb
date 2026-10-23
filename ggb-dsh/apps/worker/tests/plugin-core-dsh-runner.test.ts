@@ -13,6 +13,7 @@ import { PluginCoreGateway } from '../src/plugin-core/gateway.js'
 import { PluginCoreDshRunner } from '../src/plugin-core/dsh-runner.js'
 import type { PluginCoreRunResult } from '../src/plugin-core/process-runner.js'
 import { PluginCoreToolGatewayServer } from '../src/plugin-core/tool-gateway-server.js'
+import { PluginCoreExecutionState } from '../src/plugin-core/execution-state.js'
 
 const runId = runIdSchema.parse('run_00000000-0000-4000-8000-000000000004')
 const turnId = '22222222-2222-4222-8222-222222222222'
@@ -40,6 +41,31 @@ function send(socketPath: string, body: unknown): Promise<string> {
 }
 
 describe('plugin-core DSH runner', () => {
+  it.each([false, true])('publishes only live SDK notifications, never returned history, and closes observation (live=%s)', async live => {
+    const dir = await mkdtemp(join(tmpdir(), 'sdk-progress-wiring-')); dirs.push(dir)
+    const state = new PluginCoreExecutionState(dir)
+    const facts: unknown[] = []
+    state.observeProgress(runId, fact => { facts.push(fact) })
+    let late: (() => void) | undefined
+    const subject = new PluginCoreDshRunner({ workspaceRoot: dir, dshHomeRoot: join(dir, 'homes'),
+      provider: 'deepseek', baseUrl: 'http://127.0.0.1:1', modelId: 'offline', reasoningEffort: 'off',
+      maxTokens: 512, serverPatch, sdkVersion: '0.2.1-rc.2', state,
+      createHarness: () => ({ close: async () => { late?.() }, run: async (_prompt, options) => {
+        const event = { type: 'step/start', data: { turn: 1, step: 1 } }
+        const notify = (step: number) => options.onNotification?.({ method: 'session.event', params: {
+          sessionId: options.sessionId, event: { ...event, data: { turn: 1, step } },
+        } })
+        if (live) notify(1)
+        late = () => { notify(2) }
+        return { sessionId: options.sessionId, finalResponse: '', events: [event], notifications: [] } as unknown as RunResult
+      } }),
+    }, { openTurn: () => 'token', closeTurn: () => {}, drainTurn: async () => {},
+      socketPath: join(dir, 'unused.sock') } as never)
+    await subject.run({ runId, turnId, epoch: 1, providerKey: 'fake', prompt: 'offline', baseAttached: false })
+    late?.()
+    expect(facts).toHaveLength(live ? 1 : 0)
+    if (live) expect(facts[0]).toMatchObject({ tool: 'model', status: 'started', step: 1 })
+  })
   it.each([[false, false], [true, false], [false, true], [true, true]])('wires host patch, tools and SDK image with base=%s image=%s', async (baseAttached, withImage) => {
     const dir = await mkdtemp(join(tmpdir(), 'plugin-core-dsh-'))
     dirs.push(dir)
@@ -61,18 +87,18 @@ describe('plugin-core DSH runner', () => {
         expect(_prompt).not.toContain('Do not call ggb_inspect;')
         expect(_prompt).toContain(baseAttached ? 'A base GGB is attached' : 'No base GGB is attached')
         const env = captured?.env ?? {}
-        const args = { request: { protocolVersion: 2, prompt: 'draw a circle' } }
-        const unsigned = {
-          protocolVersion: 2, requestId: randomUUID(), issuedAt: new Date().toISOString(),
-          nonce: randomBytes(16).toString('hex'), runId,
-          turnId: env.GGB_PLUGIN_CORE_TOOL_TURN_ID!,
-          epoch: Number(env.GGB_PLUGIN_CORE_TOOL_EPOCH), toolCallId: randomUUID(),
-          toolName: 'ggb_build', arguments: args, argumentsDigest: toolArgumentsDigest(args),
+        const call = async (toolName: string, args: unknown) => {
+          const unsigned = { protocolVersion: 3, requestId: randomUUID(), issuedAt: new Date().toISOString(),
+            nonce: randomBytes(16).toString('hex'), runId, turnId: env.GGB_PLUGIN_CORE_TOOL_TURN_ID!,
+            epoch: Number(env.GGB_PLUGIN_CORE_TOOL_EPOCH), toolCallId: randomUUID(), toolName,
+            arguments: args, argumentsDigest: toolArgumentsDigest(args) }
+          const response = await send(env.GGB_PLUGIN_CORE_TOOL_SOCKET!, { ...unsigned,
+            authentication: installedSchemas.signRequest(env.GGB_PLUGIN_CORE_TOOL_TOKEN!, unsigned) })
+          return installedSchemas.parseToolResponse(JSON.parse(response.trim()))
         }
-        const response = await send(env.GGB_PLUGIN_CORE_TOOL_SOCKET!,
-          { ...unsigned, authentication: installedSchemas.signRequest(
-            env.GGB_PLUGIN_CORE_TOOL_TOKEN!, unsigned) })
-        const parsed = installedSchemas.parseToolResponse(JSON.parse(response.trim()))
+        await call('ggb_request', { action: 'create', locale: 'en' })
+        const checked = await call('ggb_check', { revision: 1 })
+        const parsed = await call('ggb_build', { checkedRequestId: checked.result.result.checkedRequestId })
         return { sessionId: turnId, finalResponse: JSON.stringify(parsed.result),
           events: [], notifications: [] } as unknown as RunResult
       },

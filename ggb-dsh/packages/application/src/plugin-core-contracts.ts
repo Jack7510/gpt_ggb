@@ -35,6 +35,7 @@ export type PluginCoreUsage = z.infer<typeof pluginCoreUsageSchema>
 export const pluginCoreFailureCodeSchema = z.enum([
   'plugin_core_failed',
   'plugin_core_max_tokens',
+  'plugin_core_malformed_response',
   'plugin_core_no_delivery',
   'plugin_core_empty_turn',
   'plugin_core_disabled',

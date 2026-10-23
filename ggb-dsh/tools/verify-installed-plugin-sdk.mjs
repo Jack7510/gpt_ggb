@@ -86,12 +86,10 @@ function checkSnapshot(observed, installation, workerSkill) {
     item.name === 'ggb-construct:worker');
   assert.equal(section?.text, workerSkill);
   assert.equal(section.interpolate, false);
-  for (const tool of observed.modelTools.filter(item => item.name !== 'ggb_inspect')) {
-    const plan = tool.parameters.properties.request.properties.plan.properties;
-    assert.equal(plan.program.type, 'array');
-    assert.deepEqual(plan.program.items.anyOf[0].required, ['id', 'op', 'source', 'mode']);
-    assert(plan.requirements.items.properties.checks.items.properties.subjects);
-  }
+  const tools = new Map(observed.modelTools.map(tool => [tool.name, tool.parameters]));
+  assert.deepEqual(tools.get('ggb_check').required, ['revision']);
+  assert.deepEqual(tools.get('ggb_build').required, ['checkedRequestId']);
+  assert.equal(tools.get('ggb_request').properties.items.maxItems, 8);
   assert.equal(observed.providerKeyPresent, false);
   assert.deepEqual(observed.networkAttempts, []);
 }

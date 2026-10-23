@@ -12,7 +12,8 @@ afterEach(() => vi.unstubAllGlobals())
 describe('construction record presentation', () => {
   it('escapes actual component code content and includes copy/download controls', async () => {
     const html = await renderToString(createSSRApp({ render: () => h(ConstructionRecord, { report, locale: 'zh-CN' }) }))
-    expect(html).toContain('构造步骤与修改记录')
+    expect(html).toContain('GGB 构造脚本')
+    expect(html).toContain('仅包含几何构造命令')
     expect(html).toContain('&lt;script&gt;')
     expect(html).not.toContain('<script>')
     expect(html).toContain('copy-construction')

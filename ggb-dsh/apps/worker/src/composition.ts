@@ -71,8 +71,8 @@ export async function composeWorker(env: NodeJS.ProcessEnv = process.env, depend
     modelId: PLUGIN_CORE_MODEL_POLICY_V1.model,
     runDeadlineMs: 10 * 60_000,
     maxConcurrentRuns: config.pluginCoreMaxConcurrentRuns,
-    // Production keeps malformed-response replay opt-in only.
-    retryMalformedResponse: false,
+    // Re-run one malformed provider turn only when no build has executed.
+    retryMalformedResponse: true,
   })
 
   const channel = new InternalChannelServer(

@@ -12,7 +12,7 @@ import { runIdSchema } from './ids.js'
  * Unix socket as NDJSON; every request carries an HMAC-SHA-256 `authentication`
  * field computed over the canonical JSON of the message without that field.
  */
-export const INTERNAL_CHANNEL_PROTOCOL_VERSION = 6 as const
+export const INTERNAL_CHANNEL_PROTOCOL_VERSION = 8 as const
 
 // Raw artifact limits and NDJSON byte budgets share one host contract.
 export const PLUGIN_CORE_LIMITS = Object.freeze({ ggbBytes: 6 * 1024 * 1024,

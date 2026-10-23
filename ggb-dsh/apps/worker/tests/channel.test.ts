@@ -124,7 +124,7 @@ describe('internal channel server', () => {
     expect(response.workerInstanceId).toBe(WORKER_INSTANCE)
   })
 
-  it.each([1, 5])('rejects v%s handshakes and legacy dispatch payloads before the handler', async version => {
+  it.each([1, 5, 6, 7])('rejects v%s handshakes and legacy dispatch payloads before the handler', async version => {
     const oldHandshake = signChannelMessage(SECRET, {
       protocolVersion: version, type: 'handshake', requestId: randomUUID(),
       issuedAt: new Date().toISOString(), nonce: randomBytes(24).toString('hex'),

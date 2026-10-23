@@ -23,9 +23,9 @@ function fakeDsh(finalResponse = 'done'): PluginCoreDshRunner {
 }
 
 function malformedResponse(events: unknown[] = [], eventsTruncated = false) {
-  return new PluginCoreTurnError('plugin_core_failed',
+  return new PluginCoreTurnError('plugin_core_malformed_response',
     { finalResponse: '', events } as never, eventsTruncated,
-    Object.assign(new Error('plugin_core_failed'), { code: 'MALFORMED_RESPONSE' }))
+    Object.assign(new Error('plugin_core_malformed_response'), { code: 'MALFORMED_RESPONSE' }))
 }
 
 function maxTokensFailure() {
@@ -85,13 +85,25 @@ describe('plugin-core service', () => {
     expect(run).toHaveBeenCalledTimes(2)
 
     const executed = vi.fn().mockRejectedValueOnce(malformedResponse([
-      { type: 'tool/call', data: {} }]))
+      { type: 'tool/call', data: { name: 'ggb_build' } }]))
     const blocked = new PluginCoreService({ run: executed } as unknown as PluginCoreDshRunner,
       { outputRoot: root, retryMalformedResponse: true })
     await expect(blocked.run({ runId, deliveryContract: 'receipt-v1',
       providerKey: 'key', prompt: 'draw' })).resolves.toMatchObject({
-      error: { code: 'plugin_core_failed' } })
+      error: { code: 'plugin_core_malformed_response' } })
     expect(executed).toHaveBeenCalledTimes(1)
+
+    const inspected = vi.fn()
+      .mockRejectedValueOnce(malformedResponse([
+        { type: 'tool/call', data: { name: 'ggb_inspect' } }]))
+      .mockResolvedValueOnce({ finalResponse: 'done', events: [
+        { type: 'turn/end', data: { reason: { kind: 'completed' } } }] })
+    const retried = new PluginCoreService({ run: inspected } as unknown as PluginCoreDshRunner,
+      { outputRoot: root, retryMalformedResponse: true })
+    await expect(retried.run({ runId, deliveryContract: 'receipt-v1',
+      providerKey: 'key', prompt: 'draw' })).resolves.toMatchObject({
+      error: { code: 'plugin_core_no_delivery' } })
+    expect(inspected).toHaveBeenCalledTimes(2)
   })
 
   it('keeps malformed retry opt-in and refuses truncated evidence', async () => {
@@ -102,7 +114,7 @@ describe('plugin-core service', () => {
       { run: defaultRun } as unknown as PluginCoreDshRunner, { outputRoot: root })
     await expect(defaultService.run({ runId, deliveryContract: 'receipt-v1',
       providerKey: 'key', prompt: 'draw' })).resolves.toMatchObject({
-      error: { code: 'plugin_core_failed' } })
+      error: { code: 'plugin_core_malformed_response' } })
     expect(defaultRun).toHaveBeenCalledTimes(1)
 
     const truncatedRun = vi.fn().mockRejectedValueOnce(malformedResponse([
@@ -115,7 +127,7 @@ describe('plugin-core service', () => {
     const result = await truncated.run({ runId, deliveryContract: 'receipt-v1',
       providerKey: 'key', prompt: 'draw' })
     expect(truncatedRun).toHaveBeenCalledTimes(1)
-    expect(result).toMatchObject({ error: { code: 'plugin_core_failed' },
+    expect(result).toMatchObject({ error: { code: 'plugin_core_malformed_response' },
       usage: { calls: 1, inputTokens: null, outputTokens: null,
         reasoningTokens: null, cacheReadTokens: null, complete: false },
       modelCallsTruncated: true })

@@ -5,7 +5,8 @@ import type { ChannelPluginCoreDelivery, PluginCoreBuildFailure, RunId } from '@
 
 /** Shared candidate and quarantine ownership; never scans a delivery directory. */
 export class PluginCoreExecutionState {
-  private readonly progress = new Map<string, { count: number; observer: PluginCoreProgressObserver }>()
+  private readonly progress = new Map<string, { count: number; observer: PluginCoreProgressObserver;
+    build?: { callId: string; buildId: string; attempt: number; limit: number } }>()
   observeProgress(runId: RunId, observer: PluginCoreProgressObserver): () => void {
     if (this.progress.has(runId)) return () => {}
     const owner = { count: 0, observer }
@@ -16,8 +17,15 @@ export class PluginCoreExecutionState {
     const owner = this.progress.get(runId)
     const parsed = pluginCoreProgressFactSchema.safeParse(fact)
     if (!owner || owner.count >= PLUGIN_CORE_PROGRESS_LIMIT || !parsed.success) return
+    const value = parsed.data
+    if (value.tool === 'ggb_build' && value.buildId && value.attempt !== undefined && value.limit !== undefined) {
+      owner.build = { callId: value.callId, buildId: value.buildId, attempt: value.attempt, limit: value.limit }
+    }
+    const build = owner.build
+    const budget = build ? { attempt: build.attempt, limit: build.limit,
+      ...(value.tool !== 'ggb_build' || value.callId === build.callId ? { buildId: build.buildId } : {}) } : {}
     try {
-      void Promise.resolve(owner.observer({ ...parsed.data, sequence: ++owner.count,
+      void Promise.resolve(owner.observer({ ...value, ...budget, sequence: ++owner.count,
         occurredAt: new Date().toISOString() })).catch(() => {})
     } catch { /* Progress observers cannot interrupt tool execution. */ }
   }

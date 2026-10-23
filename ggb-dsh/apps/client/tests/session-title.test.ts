@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { titleFromPrompt } from '../src/sessions/session-title.js'
+import { titleFromFinalReport, titleFromPrompt } from '../src/sessions/session-title.js'
 import { createMemoryDatabase } from '../src/persistence/indexeddb.js'
 import { SessionRepository } from '../src/sessions/session-repository.js'
 import { SessionService } from '../src/sessions/session-service.js'
@@ -39,6 +39,38 @@ describe('automatic local session titles', () => {
     await service.applySuggestedTitle(session.sessionId, title)
     expect((await repo.getSession(session.sessionId))?.title).toBe(title)
   })
+  it('derives a topic title after a generic image task and keeps manual titles authoritative', async () => {
+    const { repo, service } = fixture()
+    const session = await service.createSession()
+    await service.applySuggestedTitle(session.sessionId, '图片构图')
+    expect(titleFromFinalReport('我根据题目完成了构图：\n- 已绘制抛物线 \\(p:y^2=4x\\)，并标出焦点 F。',
+      undefined, 'zh-CN')).toBe('抛物线 p:y^2=4x，并标出焦点 F')
+    expect(await service.applyTopicTitle(session.sessionId, '抛物线 p:y^2=4x')).toBe(true)
+    expect((await repo.getSession(session.sessionId))?.title).toBe('抛物线 p:y^2=4x')
+    await service.renameSession(session.sessionId, '手工标题')
+    expect(await service.applyTopicTitle(session.sessionId, '抛物线')).toBe(false)
+    expect((await repo.getSession(session.sessionId))?.title).toBe('手工标题')
+  })
+  it('falls back to a native source when the final response has no geometry keyword', () => {
+    expect(titleFromFinalReport('done', 'GGB 构造脚本\n\n# 1. [algebra] par\npar: y^2=4*x\n',
+      'zh-CN')).toBe('par: y^2=4*x')
+  })
+  it('preserves commas inside coordinates, command arguments, LaTeX and lists', () => {
+    for (const source of ['O=(0,0)', 'c=Circle(O,3)', 'a={1,2,3}']) {
+      expect(titleFromFinalReport('done', source, 'en')).toBe(source)
+    }
+    expect(titleFromFinalReport('- 已绘制圆 c=Circle(O,3)，圆心 O=(0,0)。', undefined, 'zh-CN'))
+      .toBe('圆 c=Circle(O,3)，圆心 O=(0,0)')
+    expect(titleFromFinalReport('- 抛物线 \\(p:y^2=4x\\)。', undefined, 'zh-CN')).toBe('抛物线 p:y^2=4x')
+  })
+  it('does not replace a non-generic automatic title during a later completion', async () => {
+    const { repo, service } = fixture()
+    const session = await service.createSession()
+    await service.applySuggestedTitle(session.sessionId, '画一个圆')
+    expect(await service.applyTopicTitle(session.sessionId, '抛物线')).toBe(false)
+    expect((await repo.getSession(session.sessionId))?.title).toBe('画一个圆')
+  })
+
   it('does not overwrite the first automatic title or another session, and does not resurrect deletion', async () => {
     const { repo, service } = fixture()
     const first = await service.createSession(), second = await service.createSession()

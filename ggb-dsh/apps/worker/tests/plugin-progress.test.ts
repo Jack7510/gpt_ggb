@@ -24,12 +24,18 @@ describe('Worker factual progress', () => {
     for (let i = 0; i < 4; i++) await gateway.dispatch({ ...call, toolName: 'ggb_build' })
     expect(facts.filter(p => p.tool === 'ggb_build' && p.status === 'started').map(p => p.attempt)).toEqual([1, 2, 3])
     expect(facts.filter(p => p.tool === 'ggb_build' && p.status === 'rejected')).toHaveLength(4)
+    const rejected = facts.filter(p => p.tool === 'ggb_build' && p.status === 'rejected')
+    expect(rejected.slice(0, 3).map(p => [p.attempt, p.limit])).toEqual([[1, 3], [2, 3], [3, 3]])
+    expect(rejected[3]?.buildId).toBeUndefined()
+    expect(rejected[3]).toMatchObject({ attempt: 3, limit: 3 }) // last actual slot, never a fourth reservation
+    state.reportProgress(runId, { tool: 'model', status: 'started', step: 4, callId: randomUUID() })
+    expect(facts.at(-1)).toMatchObject({ tool: 'model', attempt: 3, limit: 3, buildId: rejected[2]?.buildId })
     expect(facts.map(p => p.sequence)).toEqual(facts.map((_, i) => i + 1))
     expect(facts[0]?.callId).toBe(facts[1]?.callId)
     expect(JSON.stringify(facts)).not.toMatch(/secret|private|provider-key/)
     stop()
     await gateway.dispatch({ ...call, toolName: 'ggb_check' })
-    expect(facts).toHaveLength(11)
+    expect(facts).toHaveLength(12)
   })
   it('bounds progress and isolates throwing observers from execution', async () => {
     const state = new PluginCoreExecutionState('/unused')
@@ -39,6 +45,22 @@ describe('Worker factual progress', () => {
     for (let i = 0; i < 80; i++) expect((await gateway.dispatch({ ...call, toolName: 'ggb_check' })).status).toBe('accepted')
     expect(observer).toHaveBeenCalledTimes(PLUGIN_CORE_PROGRESS_LIMIT)
     stop()
+  })
+  it.each(['accepted', 'rejected', 'failed'] as const)('keeps complete durable budget on build %s and subsequent reads', status => {
+    const state = new PluginCoreExecutionState('/unused')
+    const facts: PluginCoreProgress[] = []
+    state.observeProgress(runId, fact => { facts.push(fact) })
+    const callId = randomUUID()
+    const buildId = randomUUID()
+    state.reportProgress(runId, { tool: 'ggb_build', status: 'started', callId, buildId, attempt: 2, limit: 3 })
+    state.reportProgress(runId, { tool: 'ggb_build', status, callId })
+    state.reportProgress(runId, { tool: 'ggb_inspect', status: 'started', callId: randomUUID() })
+    expect(facts.slice(1).every(fact => fact.buildId === buildId && fact.attempt === 2 && fact.limit === 3)).toBe(true)
+    const other: PluginCoreProgress[] = []
+    const otherRun = runIdSchema.parse(`run_${randomUUID()}`)
+    state.observeProgress(otherRun, fact => { other.push(fact) })
+    state.reportProgress(otherRun, { tool: 'model', status: 'started', step: 1, callId: randomUUID() })
+    expect(other[0]?.attempt).toBeUndefined()
   })
   it('reports process exceptions and refunds before a repeated budget slot', async () => {
     const state = new PluginCoreExecutionState('/unused')

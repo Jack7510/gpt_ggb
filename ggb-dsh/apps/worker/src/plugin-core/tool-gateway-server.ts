@@ -4,7 +4,7 @@ import { createConnection, createServer, type Server, type Socket } from 'node:n
 import type { RunId } from '@ggb-copilot/application'
 import { PluginCoreGateway, type PluginCoreToolName, type PluginCoreToolResult } from './gateway.js'
 import { type PluginCoreEvidenceStore } from './evidence.js'
-import { type HostToolProtocol, type HostToolRequest, type HostToolResponse } from './tool-protocol.js'
+import { type HostToolProtocol, type HostToolRequest, type HostToolResponse, type HostDraftSession } from './tool-protocol.js'
 
 const MAX_CLOCK_SKEW_MS = 30_000
 
@@ -16,6 +16,7 @@ interface ToolGatewayOptions {
 interface TurnBinding {
   readonly runId: RunId
   readonly epoch: number
+  readonly draft: HostDraftSession
   readonly token: Buffer
   readonly abort: AbortController
   readonly signal?: AbortSignal
@@ -44,14 +45,14 @@ export class PluginCoreToolGatewayServer {
   }
 
   /** Mint one turn capability. The Harness receives the token; it never reaches storage or logs. */
-  openTurn(runId: RunId, turnId: string, epoch: number, signal?: AbortSignal): string {
+  openTurn(runId: RunId, turnId: string, epoch: number, signal?: AbortSignal, prompt = ''): string {
     if (this.bindings.has(turnId)) throw new Error('plugin_core_tool_turn_already_open')
     const token = randomBytes(32).toString('hex')
     const abort = new AbortController()
     const onAbort = (): void => abort.abort()
     signal?.addEventListener('abort', onAbort, { once: true })
     if (signal?.aborted === true) abort.abort()
-    this.bindings.set(turnId, { runId, epoch, token: Buffer.from(token, 'hex'), abort,
+    this.bindings.set(turnId, { runId, epoch, draft: this.protocol.createDraft(prompt), token: Buffer.from(token, 'hex'), abort,
       ...(signal === undefined ? {} : { signal, onAbort }) })
     this.options.evidence?.begin(runId, turnId, epoch, [token])
     return token
@@ -171,6 +172,7 @@ export class PluginCoreToolGatewayServer {
       const work = this.gateway.dispatch({
         toolName: request.toolName, runId: request.runId, turnId: request.turnId,
         epoch: request.epoch, arguments: this.protocol.arguments(request),
+        draftSession: this.bindings.get(request.turnId)!.draft,
         wireArguments: request.arguments, argumentsDigest: request.argumentsDigest,
         requestId: request.requestId, toolCallId: request.toolCallId, protocolVersion: this.protocol.version,
       }, AbortSignal.any([signal, this.bindings.get(request.turnId)!.abort.signal]))
@@ -222,7 +224,7 @@ export class PluginCoreToolGatewayServer {
     this.reply(socket, { protocolVersion: this.protocol.version, requestId, type: 'tool.error', result: null, error })
   }
 
-  private reply(socket: Socket, response: Omit<HostToolResponse, 'protocolVersion'> & { protocolVersion: 2 }): void {
+  private reply(socket: Socket, response: Omit<HostToolResponse, 'protocolVersion'> & { protocolVersion: 3 }): void {
     const line = `${JSON.stringify(response)}\n`
     if (Buffer.byteLength(line) > this.protocol.maxFrameBytes) throw new Error('plugin_core_tool_response_too_large')
     if (!socket.destroyed) socket.end(line)

@@ -11,7 +11,7 @@
 禁用通用 bash/PowerShell、文件、工作目录、文本编辑及原始日志插件。安装包不能移除这层宿主配置。
 
 [宿主工具策略](../apps/worker/src/plugin-core/host-policy-plugin.ts) 使用 SDK 公开 tools.guard 执行单调拒绝：
-只允许 `ggb_inspect / ggb_check / ggb_build`。每次模型流开始前，宿主同时校验实际工具注册表和
+只允许 `ggb_inspect / ggb_request / ggb_check / ggb_build`。每次模型流开始前，宿主同时校验实际工具注册表和
 模型请求携带的工具表。缺少工具、出现其他工具或重复工具时，在调用 Provider 前拒绝本轮。
 此检查不依赖流诊断采集器；诊断缺失或限额不会解除权限限制。
 
@@ -25,9 +25,9 @@
 | SDK Client / runtime / tools | `0.2.1-rc.2`；Worker、application 和 workspace overrides 一致 |
 | Cordis / group / pi-ai | `4.0.5` / `1.0.5` / `1.3.0`；完整传递依赖由 workspace lock 固定 |
 | 插件 | `ggb-plugins-dsh@0.8.3`；来自本地修改源码的 development-build，尚未发布 |
-| 发行包 SHA-256 | `c0bd9d50ae405683cc063c8373a6bcad91f67e80279ff7a9be81dc9b90f4faae` |
-| Worker Skill SHA-256 | `53219ac33eaf396fbbfe3184ac6b9852dff2058cce0c969c1184f002204176d0` |
-| 工具 / executor / receipt / API↔Worker | 协议 `2` / envelope `3` / schema `2` / channel `6`；桌面 CLI 保持 envelope `1` |
+| 发行包 SHA-256 | `6fceb090576d5f9c8e92dad08afe42c8f6632213281a0552610c42fc54fbf043` |
+| Worker Skill SHA-256 | `38a811fcbb33d46f39554262a63eda64c87b261d76286237189f8565ac473d64` |
+| 工具 / executor / receipt / API↔Worker | 协议 `3` / envelope `3` / schema `2` / channel `8`；桌面 CLI 保持 envelope `1` |
 | 插件 GeoGebra | `5.4.932.1`；归档 SHA-256 见 vendor lock |
 | Playwright | `1.64.1`；执行器选择该包管理的 Chromium，不依赖系统 Chrome |
 | Client applet | `5.4.929.3`，独立于插件 runtime；没有随本次切换升级 |
@@ -39,7 +39,7 @@ Worker 在导入代码前核对发行文件摘要，再通过公开 `installatio
 缺少安装包、包被改动或 SDK 组合不匹配时拒绝启动。`GGB_DSH_SDK_VERSION` 来自已核对的实际 SDK 包。
 
 公开入口：`ggb-plugins-dsh/server`、`server.patch.yml`、`installation`、`schemas`、`cli`、
-`executor`、`delivery-contract`。三工具和 Worker Skill 的领域定义由插件拥有；宿主只拥有准入、
+`executor`、`delivery-contract`、`drafts`。四工具和 Worker Skill 的领域定义由插件拥有；宿主只拥有准入、
 证据、进程监督、产物接收与原子提交。Client 不依赖 DSH SDK。
 
 ## 安装与启动
@@ -73,7 +73,7 @@ node tools/verify-installed-plugin-sdk.mjs \
 该安装可执行协议检查，业务 Worker 会在资源准入处拒绝启动。
 验证器使用 canonical Worker SDK，离线安装本次 TGZ，只执行 initialize 和注册表/Prompt 检查。
 SDK 子进程不继承凭据，测试 preload 拒绝 HTTP、fetch 和 socket 网络连接；关闭后再次核对尝试记录。
-两个隔离 Harness 必须发现准确三工具和完整 Worker Skill，删除首个 home 后第二个仍能加载。
+两个隔离 Harness 必须发现准确四工具和完整 Worker Skill，删除首个 home 后第二个仍能加载。
 证据写入忽略目录 `result.json`。初始化通过不代表真实构图或浏览器清理通过。
 
 ## Provider 与升级边界
@@ -86,7 +86,7 @@ Key 只在 run 期间存在，不写入数据库、日志或 DSH Session。Clien
 
 ## SDK 失败诊断与宿主协议适配
 
-当前默认装配继承批次 B 的诊断行为，使用安装包协议 2；公开 HTTP/SSE schema 保持不变。
+当前默认装配继承批次 B 的诊断行为，使用安装包协议 3；公开 HTTP/SSE schema 保持不变。
 
 | 所有者 | 行为与可定位入口 |
 | --- | --- |
@@ -94,18 +94,18 @@ Key 只在 run 期间存在，不写入数据库、日志或 DSH Session。Clien
 | [DSH runner](../apps/worker/src/plugin-core/dsh-runner.ts) | run 的 onNotification 回调收集失败前事件；异常、SDK 错误终态、关闭失败均保留诊断，不重放 |
 | [Service](../apps/worker/src/plugin-core/service.ts) | 合并失败轮的有界 accounting 子集；未知 token 计数保留 null，截断时总用量标为不完整 |
 | [Gateway](../apps/worker/src/plugin-core/gateway.ts) | 同一 run 串行准入，持久化后才执行，保留参数、issues、工具原结果和调用身份；模型只取得脱敏投影 |
-| [协议适配](../apps/worker/src/plugin-core/tool-protocol.ts) | loadInstalledToolProtocol(pluginRoot) 从安装包公开 schemas 导出加载协议 2；不提供协议 1 回退 |
+| [协议适配](../apps/worker/src/plugin-core/tool-protocol.ts) | loadInstalledToolProtocol(pluginRoot) 从安装包公开 schemas 导出加载协议 3；拒绝协议 1/2 |
 | [受控 Runner](../apps/worker/src/plugin-core/process-runner.ts) | 在 stdout/stderr 关闭后记录包装进程退出码、signal、字节数及尾部；异常退出和输出超限不能按成功解析 |
 
-协议 2 必须在创建 ToolGatewayServer 时显式传入 options.protocol。它使用插件发布的解析与认证函数，
-不在宿主复制第二份协议 2 schema。版本选择不从收到的报文推断，不回退到另一版协议。
+协议 3 必须在创建 ToolGatewayServer 时显式传入 options.protocol。它使用插件发布的解析与认证函数，
+不在宿主复制第二份协议 3 schema。版本选择不从收到的报文推断，不回退到另一版协议。
 现有业务 Gateway 消费解包后的领域 request，账本同时保留原始 wire arguments 与其摘要。
 requestId、toolCallId、turnId、epoch 贯通认证和执行；实际进入 build 的调用另有宿主生成的 buildId。
 同一 turn 的重复 requestId 即使换 nonce 也被拒绝；取消 capability 后不能继续准入。
 
 SDK callId 与宿主 toolCallId 不是同一标识。诊断通过同一 turn、工具名和领域请求摘要关联；只有唯一且
 尚未关联的 SDK 调用才能记为 matched，多候选记为 ambiguous，缺少证据记为 unavailable。
-这不改变协议 2 的已发布开发字段，也不要求模型提供身份。
+这不要求更改领域请求 2，也不要求模型提供身份。
 失败轮没有任何可观察调用时 usage 为 null；已有调用的计数只表示已观察的事实，不把缺失的用量记成零。
 
 ### 私有证据与预算
@@ -176,7 +176,7 @@ manifest 的文件名、runtime 和摘要语义由插件 validateHostMaterial �
 
 ## 可信交付与取消结算
 
-开发默认装配使用安装插件和可信回执；API 与 Worker 必须一起使用内部通道 6。
+开发默认装配使用安装插件和可信回执；API 与 Worker 必须一起使用内部通道 8。
 没有保留旧固定目录交付入口，也不能从报文自动选择旧版本。
 
 | 边界 | 执行契约 |
@@ -189,7 +189,7 @@ manifest 的文件名、runtime 和摘要语义由插件 validateHostMaterial �
 | [API](../apps/api/src/plugin-core/run-service.ts) | 保留原始 report/manifest 字节、回执和准入关联；消费 committed/cancelled/conflict；冲突仍为活动状态时提交失败结算 |
 | [Store 共同校验](../packages/run-persistence/src/plugin-core-completion.ts) | 校验真实字节、大小、摘要、唯一 kind/引用、报告/manifest 与回执一致性；接收、产物和终态事件在同一次提交内保存 |
 
-安装模式必须同时使用协议 2 网关、InstalledPluginCoreRunner、共享 ExecutionState 和可信交付 Service。
+安装模式必须同时使用协议 3 网关、InstalledPluginCoreRunner、共享 ExecutionState 和可信交付 Service。
 API 和 Store 创建新 run 时固定 `deliveryContract=receipt-v1`。
 迁移 `018_plugin_core_delivery_contract.sql` 保存此事实；receipt-v1 缺少回执不能按 legacy 完成。
 Worker 在 SDK 任务前拒绝非 receipt-v1 请求。018 的 SQL 默认 legacy 仅保留历史行语义，不能授权旧交付完成。
@@ -243,7 +243,7 @@ PG 参数只用于专用一次性本机数据库，不读取 DATABASE_URL；测�
 
 ## 默认装配与迁移离线验收
 
-`plugin-core-default-composition.test.ts` 装配真实安装包、协议 2 网关和 channel 5，
+`plugin-core-default-composition.test.ts` 装配真实安装包、协议 3 网关和 channel 5，
 以 mock Harness 驱动实际插件工具客户端；只替换 SDK 模型调用和资源准备检查。
 检查 API 新 run 的 receipt-v1、公开 patch 选择、工具认证和无构建时的失败结算。
 实际 SDK 初始化由上面的独立验证器覆盖。两种检查均不启动浏览器。
@@ -261,7 +261,7 @@ PG 参数只用于专用一次性本机数据库，不读取 DATABASE_URL；测�
 在已获得真实 GeoGebra/浏览器执行授权后，于 `ggb-dsh/` 运行：
 
 ```bash
-GGB_PLUGIN_TEST_ROOT="$PWD/.plugin-core-runtime/c0bd9d50ae405683cc063c8373a6bcad91f67e80279ff7a9be81dc9b90f4faae" \
+GGB_PLUGIN_TEST_ROOT="$PWD/.plugin-core-runtime/6fceb090576d5f9c8e92dad08afe42c8f6632213281a0552610c42fc54fbf043" \
 GGB_E_OUTPUT_ROOT="$PWD/../output/installed-plugin-e/recheck-$(date +%s)" \
   pnpm run verify:plugin-core:runtime
 ```
@@ -354,7 +354,7 @@ Worker 在本次 build 的独立目录读取 CLI 失败、`run.json` 和 `verifi
 ## Review 后续兼容边界
 
 回执 schema 2 只携带报告字节引用和 2 KiB 内的摘要。完整报告单独传输。
-API 与 Worker 使用通道 6；不能与通道 5 及更早版本混用。执行器保持 3，工具和上下文保持 2。
+API 与 Worker 使用通道 8；不能与通道 7 及更早版本混用。执行器保持 3，工具升级为 3，上下文保持 2。
 GGB/preview/报告/manifest 原始上限分别为 6/3/1/1 MiB；交付 JSON 为 16 MiB，响应帧为 17 MiB。
 插件公开 LIMITS、宿主 schema、接受边界及原子提交共同执行这些上限。API 按 run 隔离连接。
 预览缺失不影响 completed；存在但非法时拒绝。基线在插件执行前后及宿主接受时核对。
@@ -366,6 +366,13 @@ sourceCommit 与 sourceDirty 仍描述本地开发基线，精确代码以归档
 这不是已发布的上游 0.8.3；不得覆盖现有供应目录。本机最终包的完整 runtime/doctor、4 项 mock Harness + 真实 GeoGebra 及 PWA mock 全链已通过。
 两轮旧任务的完整 wire 参数本身非法，且与 SDK 最终参数完全一致；历史原始字节离线回放仍按原样拒绝。
 当前包使用完整 `{request: {...}}` 工具示例、带类型的枚举 schema 和宿主 reasoning high。
-适配器将三工具 schema 原样传给 Messages input_schema；没有添加未经该接口支持的 strict 参数。
+适配器将四工具 schema 原样传给 Messages input_schema；没有添加未经该接口支持的 strict 参数。
 一次授权的真实 Chrome 正多边形任务完成，9 次工具参数均合法；详情、验收脚本类型别名误判及无 Provider 产物补验见 Backlog。
 这些修改降低契约歧义，不保证 Provider 永远返回合法 JSON，也不自动修补非法参数。
+
+## 分段请求契约
+
+模型只通过 ggb_request 以最多 2 KiB 参数保存完整条目，并按 revision 局部修改。
+check 接收 revision，build 接收 checkedRequestId；均不再接收完整 request。
+草稿组装和检查句柄由安装包 ./drafts 拥有，宿主只负责隔离、认证、串行准入及清理。
+契约、状态机和拒绝规则见[小块请求与已检查版本](../../docs/ggb-dsh-installed-plugin-design.md#27-小块请求与已检查版本)。

@@ -1,3 +1,4 @@
+import type { HostDraftSession } from './tool-protocol.js'
 import { summarizeBuildFailure } from './build-failure-summary.js'
 import type { PluginCoreExecutionState } from './execution-state.js'
 import { randomUUID } from 'node:crypto'
@@ -6,7 +7,7 @@ import { redactEvidence, type PluginCoreEvidenceStore, type ToolCallEvidence } f
 import type { PluginCoreBaseRegistry } from './base-registry.js'
 import type { PluginCoreRunResult } from './process-runner.js'
 
-export type PluginCoreToolName = 'ggb_inspect' | 'ggb_check' | 'ggb_build'
+export type PluginCoreToolName = 'ggb_inspect' | 'ggb_request' | 'ggb_check' | 'ggb_build'
 
 interface PluginCoreProcessRunnerPort {
   check(request: unknown, runId: RunId, signal?: AbortSignal, base?: import('./process-runner.js').PluginCoreBaseInput, call?: PluginCoreToolRequest): Promise<PluginCoreRunResult>
@@ -24,7 +25,8 @@ export interface PluginCoreToolRequest {
   readonly requestId?: string
   readonly toolCallId?: string
   readonly argumentsDigest?: string
-  readonly protocolVersion?: 2
+  readonly protocolVersion?: 3
+  readonly draftSession?: HostDraftSession
   readonly wireArguments?: unknown
   /** The plugin request object. The runner removes any model-supplied output path. */
   readonly arguments: unknown
@@ -105,17 +107,22 @@ export class PluginCoreGateway {
     const wireArguments = request.wireArguments ?? request.arguments
     const call = await turn?.beginCall({ requestId: request.requestId ?? randomUUID(),
       toolCallId: request.toolCallId ?? randomUUID(), toolName: request.toolName,
-      protocolVersion: request.protocolVersion ?? 2, arguments: wireArguments,
+      protocolVersion: request.protocolVersion ?? 3, arguments: wireArguments,
       argumentsDigest: request.argumentsDigest ?? toolArgumentsDigest(wireArguments),
       domainRequestDigest: toolArgumentsDigest(request.arguments) })
     const callId = randomUUID()
     try {
-      const result = await this.execute(request, signal, call, callId)
+      const result = await this.executeSaved(request, signal, call, callId)
       this.options.state?.reportProgress(request.runId, { tool: request.toolName, status: result.status, callId,
         ...(result.report?.buildId ? { buildId: result.report.buildId } : {}) })
       await call?.update(result.status)
       return (turn?.model(result) ?? redactEvidence(result, [], true)) as PluginCoreToolResult
     } catch (error) {
+      if (error instanceof Error && error.name === 'DraftError') {
+        this.options.state?.reportProgress(request.runId, { tool: request.toolName, status: 'rejected', callId })
+        await call?.failed(error)
+        return this.rejected(request.toolName, error.message, error.message)
+      }
       this.options.state?.reportProgress(request.runId, { tool: request.toolName, status: 'failed', callId })
       if (error instanceof Error && error.message === 'plugin_core_cleanup_failed') {
         await this.options.state?.quarantine(request.runId)
@@ -123,6 +130,30 @@ export class PluginCoreGateway {
       await call?.failed(error)
       throw error
     }
+  }
+
+  /** The installed plugin owns draft assembly; only resolved snapshots reach execution. */
+  private async executeSaved(request: PluginCoreToolRequest, signal?: AbortSignal,
+    call?: ToolCallEvidence, callId = randomUUID()): Promise<PluginCoreToolResult> {
+    signal?.throwIfAborted()
+    const draft = request.draftSession
+    if (!draft) return await this.execute(request, signal, call, callId)
+    if (request.toolName === 'ggb_request') {
+      this.options.state?.reportProgress(request.runId, { tool: request.toolName, status: 'started', callId })
+      const result = draft.operate(request.arguments)
+      if (isRecord(request.arguments) && request.arguments.action !== 'read') this.options.state?.invalidate(request.runId)
+      await call?.result(result)
+      return { status: 'accepted', toolName: request.toolName, result, errors: [] }
+    }
+    if (request.toolName === 'ggb_inspect') return await this.execute(request, signal, call, callId)
+    const snapshot = request.toolName === 'ggb_check' ? draft.forCheck(request.arguments) : draft.forBuild(request.arguments)
+    await call?.update('resolved', { domainRequestDigest: snapshot.domainRequestDigest, revision: snapshot.revision })
+    const { draftSession: _session, ...resolved } = request
+    const result = await this.execute({ ...resolved, arguments: snapshot.request }, signal, call, callId)
+    if (request.toolName === 'ggb_check' && result.status === 'accepted') {
+      return { ...result, result: { ...(isRecord(result.result) ? result.result : {}), ...draft.acceptCheck(snapshot) } }
+    }
+    return result
   }
 
   private async execute(request: PluginCoreToolRequest, signal?: AbortSignal,

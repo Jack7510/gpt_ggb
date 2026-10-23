@@ -68,8 +68,13 @@ async function send(path: string, value: unknown): Promise<string> {
     socket.once('error', reject)
   })
 }
-const request = { protocolVersion: 2, prompt: 'draw a circle' }
+const request = { protocolVersion: 2, prompt: '', locale: 'en', plan: { requirements: [], interactions: [] } }
 const context = () => ({ signal: new AbortController().signal })
+async function prepare(h: Awaited<ReturnType<typeof harness>>) {
+  await h.tools.createTool('ggb_request').execute({ action: 'create', locale: 'en' }, context())
+  const checked = await h.tools.createTool('ggb_check').execute({ revision: 1 }, context()) as { result: { checkedRequestId: string } }
+  return { checkedRequestId: checked.result.checkedRequestId }
+}
 
 describe.skipIf(!installedRoot)('installed protocol 2 to the host (no SDK turn/provider)', () => {
   it('keeps executing authenticated tools after the call evidence budget is full', async () => {
@@ -106,19 +111,20 @@ describe.skipIf(!installedRoot)('installed protocol 2 to the host (no SDK turn/p
   })
   it('unwraps the real plugin request and correlates actual SDK identity without equating it', async () => {
     const h = await harness()
+    await h.tools.createTool('ggb_request').execute({ action: 'create', locale: 'en' }, context())
     h.evidence.get(h.turnId)!.notification({ method: 'session.event', params: {
       sessionId: h.turnId, event: { type: 'tool/call', data: { turn: 1, step: 1,
-        callId: 'sdk-real-call', name: 'ggb_check', arguments: JSON.stringify({ request }) } },
+        callId: 'sdk-real-call', name: 'ggb_check', arguments: JSON.stringify({ revision: 1 }) } },
     } })
-    expect(await h.tools.createTool('ggb_check').execute({ request }, context()))
+    expect(await h.tools.createTool('ggb_check').execute({ revision: 1 }, context()))
       .toMatchObject({ status: 'accepted', result: { validation: 'structural' } })
     expect(h.runner.check).toHaveBeenCalledWith(request, h.runId, expect.any(AbortSignal), undefined, expect.objectContaining({ toolName: 'ggb_check' }))
     const value = await h.ledger()
-    expect(value.calls[0]).toMatchObject({ stage: 'accepted', protocolVersion: 2,
-      arguments: { request }, sdkCallId: 'sdk-real-call', sdkCorrelation: 'matched',
+    expect(value.calls.find((c: { toolName: string }) => c.toolName === 'ggb_check')).toMatchObject({ stage: 'accepted', protocolVersion: 3,
+      arguments: { revision: 1 }, sdkCallId: 'sdk-real-call', sdkCorrelation: 'matched',
       pluginResult: { ok: true, check: { validation: 'structural' } } })
-    expect(value.calls[0].toolCallId).not.toBe('sdk-real-call')
-    expect(value.calls[0].requestId).toMatch(/^[a-f0-9-]{36}$/)
+    expect(value.calls.find((c: { toolName: string }) => c.toolName === 'ggb_check').toolCallId).not.toBe('sdk-real-call')
+    expect(value.calls.find((c: { toolName: string }) => c.toolName === 'ggb_check').requestId).toMatch(/^[a-f0-9-]{36}$/)
   })
 
   it('revokes the capability immediately but drains admitted work before returning', async () => {
@@ -131,11 +137,12 @@ describe.skipIf(!installedRoot)('installed protocol 2 to the host (no SDK turn/p
       admitted(); await gate
       return { ok: false, error: { code: 'plugin_runner_cancelled', message: 'cancelled' } }
     })
-    const call = h.tools.createTool('ggb_build').execute({ request }, context())
+    const checked = await prepare(h)
+    const call = h.tools.createTool('ggb_build').execute(checked, context())
     await started
     let cleaned = false
     const draining = h.server.drainTurn(h.turnId).then(() => { cleaned = true })
-    await expect(h.tools.createTool('ggb_check').execute({ request }, context())).rejects.toThrow('unauthorized')
+    await expect(h.tools.createTool('ggb_check').execute({ revision: 1 }, context())).rejects.toThrow('unauthorized')
     expect(cleaned).toBe(false)
     release(); await draining; await call
     expect(cleaned).toBe(true)
@@ -148,7 +155,8 @@ describe.skipIf(!installedRoot)('installed protocol 2 to the host (no SDK turn/p
     let release!: () => void
     const gate = new Promise<void>(done => { release = done })
     h.runner.build.mockImplementation(async () => { admitted(); await gate; return { ok: false } })
-    const call = h.tools.createTool('ggb_build').execute({ request }, context())
+    const checked = await prepare(h)
+    const call = h.tools.createTool('ggb_build').execute(checked, context())
     await started
     await expect(h.server.drainTurn(h.turnId, 25)).rejects.toThrow('plugin_core_cleanup_failed')
     release(); await call
@@ -161,7 +169,8 @@ describe.skipIf(!installedRoot)('installed protocol 2 to the host (no SDK turn/p
         issues: [{ code: 'bad_label', path: 'plan.program[0]', message: 'choose another label' }],
         stderrTail: 'fake-provider-secret details', authentication: h.token,
       } } })
-    const result = await h.tools.createTool('ggb_build').execute({ request }, context())
+    const checked = await prepare(h)
+    const result = await h.tools.createTool('ggb_build').execute(checked, context())
     const text = JSON.stringify(result)
     expect(text).not.toContain('fake-provider-secret')
     expect(text).not.toContain(h.token)
@@ -171,17 +180,18 @@ describe.skipIf(!installedRoot)('installed protocol 2 to the host (no SDK turn/p
       issues: [{ code: 'bad_label', path: 'plan.program[0]' }],
     } }] })
     const value = await h.ledger()
-    expect(value.calls[0].buildId).toMatch(/^[a-f0-9-]{36}$/)
-    expect(value.calls[0].pluginResult.error.details.issues[0].message).toBe('choose another label')
+    expect(value.calls.find((c: { toolName: string }) => c.toolName === 'ggb_build').buildId).toMatch(/^[a-f0-9-]{36}$/)
+    expect(value.calls.find((c: { toolName: string }) => c.toolName === 'ggb_build').pluginResult.error.details.issues[0].message).toBe('choose another label')
     expect(JSON.stringify(value)).not.toContain('fake-provider-secret')
   })
 
   it('retains the underlying exception but sends only internal_error to the plugin', async () => {
     const h = await harness()
+    await h.tools.createTool('ggb_request').execute({ action: 'create', locale: 'en' }, context())
     h.runner.check.mockRejectedValue(Object.assign(new Error('specific socket failure fake-provider-secret'), { code: 'EPIPE' }))
-    await expect(h.tools.createTool('ggb_check').execute({ request }, context()))
+    await expect(h.tools.createTool('ggb_check').execute({ revision: 1 }, context()))
       .rejects.toThrow('ggb_host_error:internal_error')
-    expect((await h.ledger()).calls[0]).toMatchObject({ stage: 'failed', error: {
+    expect((await h.ledger()).calls.at(-1)).toMatchObject({ stage: 'failed', error: {
       code: 'EPIPE', message: 'specific socket failure [redacted]',
     } })
     expect(h.runner.check).toHaveBeenCalledOnce()
@@ -189,8 +199,9 @@ describe.skipIf(!installedRoot)('installed protocol 2 to the host (no SDK turn/p
 
   it('rejects stale epochs, bad signatures and duplicate request IDs without repeated effects', async () => {
     const h = await harness()
-    const args = { request }
-    const base = { protocolVersion: 2, runId: h.runId, turnId: h.turnId, epoch: 1,
+    await h.tools.createTool('ggb_request').execute({ action: 'create', locale: 'en' }, context())
+    const args = { revision: 1 }
+    const base = { protocolVersion: 3, runId: h.runId, turnId: h.turnId, epoch: 1,
       requestId: randomUUID(), toolCallId: randomUUID(), issuedAt: new Date().toISOString(),
       nonce: 'a'.repeat(32), toolName: 'ggb_check', arguments: args,
       argumentsDigest: h.schemas.digestJson(args) }
@@ -215,20 +226,21 @@ describe.skipIf(!installedRoot)('installed protocol 2 to the host (no SDK turn/p
       await new Promise(done => setTimeout(done, 5))
       active -= 1; return { ok: true }
     })
+    const checked = await prepare(h)
     const results = await Promise.all(Array.from({ length: 4 }, () =>
-      h.tools.createTool('ggb_build').execute({ request }, context())))
+      h.tools.createTool('ggb_build').execute(checked, context())))
     expect(results.filter(result => (result as { status: string }).status === 'rejected'))
       .toEqual([expect.objectContaining({ errors: [{ code: 'build_limit_reached', message: expect.any(String) }] })])
     expect(h.runner.build).toHaveBeenCalledTimes(3)
     expect(maxActive).toBe(1)
-    expect((await h.ledger()).calls).toHaveLength(4)
+    expect((await h.ledger()).calls.filter((c: { toolName: string }) => c.toolName === 'ggb_build')).toHaveLength(4)
   })
 
   it('does not execute when the evidence destination fails', async () => {
     const h = await harness()
     await writeFile(join(h.dir, h.runId), 'force mkdir failure')
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    await expect(h.tools.createTool('ggb_check').execute({ request }, context()))
+    await expect(h.tools.createTool('ggb_check').execute({ revision: 1 }, context()))
       .rejects.toThrow('ggb_host_error:internal_error')
     expect(h.runner.check).not.toHaveBeenCalled()
   })

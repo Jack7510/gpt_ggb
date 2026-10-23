@@ -437,13 +437,14 @@ function usageOf(result: ChannelPluginCoreResult): PluginCoreUsage | null {
 }
 
 function pluginFailureCode(value: string | undefined):
-  'plugin_core_failed' | 'plugin_core_max_tokens' | 'plugin_core_no_delivery'
+  'plugin_core_failed' | 'plugin_core_max_tokens' | 'plugin_core_malformed_response' | 'plugin_core_no_delivery'
   | 'plugin_core_empty_turn' | 'plugin_core_disabled' | 'plugin_core_timeout'
   | 'plugin_core_worker_unavailable' | 'plugin_core_interrupted'
   | 'plugin_core_cancelled' | 'plugin_core_delivery_missing'
   | 'plugin_core_cleanup_failed' | 'plugin_core_commit_conflict' | 'plugin_core_delivery_invalid' {
   switch (value) {
     case 'plugin_core_max_tokens':
+    case 'plugin_core_malformed_response':
     case 'plugin_core_no_delivery':
     case 'plugin_core_empty_turn':
     case 'plugin_core_delivery_invalid':

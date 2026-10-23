@@ -8,7 +8,7 @@ import { prepareInstalledTests } from '../../../tools/installed-plugin-test-setu
 
 const dirs: string[] = []
 afterEach(async () => { for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true }) })
-const allowed = ['ggb_build', 'ggb_check', 'ggb_inspect'].map(name => ({ name }))
+const allowed = ['ggb_build', 'ggb_check', 'ggb_inspect', 'ggb_request'].map(name => ({ name }))
 
 describe('host-owned SDK permissions', () => {
   it('owns all disabled plugins and appends a separate execution guard', async () => {

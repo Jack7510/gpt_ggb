@@ -1,7 +1,7 @@
 /** Enforce the host tool boundary using public SDK registry and guard APIs. */
 export const name = 'ggb-host-tool-policy'
 export const inject = ['tools', 'llm']
-const ALLOWED = ['ggb_build', 'ggb_check', 'ggb_inspect']
+const ALLOWED = ['ggb_build', 'ggb_check', 'ggb_inspect', 'ggb_request']
 interface ToolSchema { name: string }
 interface StreamOptions { tools?: ToolSchema[] }
 interface Context {

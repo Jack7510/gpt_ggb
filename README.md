@@ -31,11 +31,11 @@ Browser PWA
                  ▼
 Plugin-core Server
   ├─ API：HTTP/SSE、run 生命周期和产物鉴权
-  ├─ Worker：SDK Server、协议 2 工具网关、可信回执接收与进程清理
+  ├─ Worker：SDK Server、协议 3 工具网关、可信回执接收与进程清理
   └─ plugin_core_* run store：过程、交付与用量事实
                  │
                  ├─ DeepSeek Provider
-                 └─ 安装式 ggb-construct 插件：三工具、Worker Skill、Playwright + GeoGebra
+                 └─ 安装式 ggb-construct 插件：四工具、Worker Skill、Playwright + GeoGebra
 ```
 
 浏览器不运行模型循环，也不执行模型生成的任意 GeoGebra 命令。Provider Key 只在本次服务端执行期间
@@ -63,7 +63,7 @@ Plugin-core Server
 | `AGENTS.md` | Coding Agent 的工作契约；不另维护项目结构、技术栈或架构说明。 |
 
 `ggb-plugins` 是独立插件依赖。开发默认链路从固定 TGZ 安装，不依赖源码 checkout 或桌面插件缓存。
-宿主只通过公开入口加载三工具、Worker Skill 和执行器；新 run 固定使用可信回执交付。
+宿主只通过公开入口加载四工具、Worker Skill 和执行器；新 run 固定使用可信回执交付。
 共享领域包与服务端 runtime 包保持独立边界；详见 [共享内核设计](docs/ggb-shared-tech.md)。
 
 ## 技术栈

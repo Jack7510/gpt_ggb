@@ -99,7 +99,7 @@ export class InstalledPluginCoreRunner {
   /** buildId and authenticated identities are mandatory in installed mode. */
   async build(request: unknown, runId: RunId, signal?: AbortSignal,
     base?: PluginCoreBaseInput, call?: PluginCoreToolRequest & { buildId: string }): Promise<PluginCoreRunResult> {
-    if (!call?.requestId || !call.toolCallId || call.protocolVersion !== 2) throw new Error('plugin_core_build_identity_missing')
+    if (!call?.requestId || !call.toolCallId || call.protocolVersion !== 3) throw new Error('plugin_core_build_identity_missing')
     this.options.state.invalidate(runId)
     const { root, binding, outcome, result } = await this.invoke('build', request, runId, signal, base, call)
     if (base && digest(await readFile(base.path)) !== base.sha256) throw new Error('plugin_core_base_changed')

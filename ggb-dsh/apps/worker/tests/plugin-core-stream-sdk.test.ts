@@ -24,9 +24,9 @@ describe('wire diagnostics across a real SDK Server', () => {
     const server = createServer(async (req, res) => {
       for await (const _chunk of req) { /* local fixture only */ }
       const index = ++requests
-      const block = index <= 17 ? { type: 'tool_use', id: `call_${index}`, name: 'ggb_check', input: {} }
+      const block = index <= 17 ? { type: 'tool_use', id: `call_${index}`, name: 'ggb_inspect', input: {} }
         : { type: 'text', text: '' }
-      const delta = index <= 17 ? { type: 'input_json_delta', partial_json: JSON.stringify({ request: { protocolVersion: 2, prompt: 'fixture' } }) }
+      const delta = index <= 17 ? { type: 'input_json_delta', partial_json: JSON.stringify({ reference: 'patterns' }) }
         : { type: 'text_delta', text: 'done' }
       const events = [{ type: 'message_start', message: { usage: { input_tokens: 1, output_tokens: 0 } } },
         { type: 'content_block_start', index: 0, content_block: block },
@@ -40,7 +40,8 @@ describe('wire diagnostics across a real SDK Server', () => {
     const address = server.address() as { port: number }
     const runId = runIdSchema.parse(`run_${randomUUID()}`); const turnId = randomUUID()
     const gateway = new PluginCoreToolGatewayServer(join(root, 'tools.sock'), new PluginCoreGateway({
-      check: async () => { calls++; return { ok: true, check: { validation: 'structural' } } },
+      check: async () => { throw new Error('must not check') },
+      reference: async () => { calls++; return { topic: 'patterns' } },
       build: async () => { throw new Error('must not build') },
     }), 1000, { protocol: toolProtocol })
     await gateway.listen()
@@ -95,18 +96,18 @@ describe('wire diagnostics across a real SDK Server', () => {
       expect(body.output_config).toEqual({ effort: 'high' })
       const req = createRequire(join(installedRoot, 'package.json'))
       const { createTool } = await import(pathToFileURL(req.resolve('ggb-plugins-dsh/server')).href)
-      expect(body.tools).toHaveLength(3)
+      expect(body.tools).toHaveLength(4)
       for (const tool of body.tools) {
         expect(tool.input_schema).toEqual(createTool(tool.name).parameters)
         expect(tool.strict).toBeUndefined() // Messages adapter does not promise strict mode.
       }
-      expect(body.system).toContain('wrap the domain request exactly once')
+      expect(body.system).toContain('Never resend the complete request')
       const stream = JSON.parse(await readFile(join(root, runId, 'diagnostics', `${turnId}.stream.json`), 'utf8'))
       const request = stream.requests[0]
       expect(request.providerRequest).toMatchObject({ thinking: 'enabled', effort: 'high' })
-      expect(request.providerRequest.jsonExamples).toContainEqual(expect.objectContaining({ validJson: true, rootKeys: ['request'] }))
-      expect(request.sdkRequest.tools).toHaveLength(3)
-      expect(request.providerRequest.tools).toHaveLength(3)
+      expect(request.providerRequest.jsonExamples).toContainEqual(expect.objectContaining({ validJson: true, rootKeys: ['action', 'locale'] }))
+      expect(request.sdkRequest.tools).toHaveLength(4)
+      expect(request.providerRequest.tools).toHaveLength(4)
       for (const tool of request.sdkRequest.tools) expect(request.providerRequest.tools)
         .toContainEqual(expect.objectContaining({ name: tool.name, schemaSha256: tool.schemaSha256 }))
       expect(JSON.stringify(stream)).not.toContain('fake-contract-key')
@@ -141,7 +142,7 @@ describe('wire diagnostics across a real SDK Server', () => {
         reasoningEffort: 'off', maxTokens: 100, serverPatch, sdkVersion: '0.2.1-rc.2',
         evidence: new PluginCoreEvidenceStore(root) }, gateway)
       await expect(runner.run({ runId, turnId, epoch: 1, providerKey: 'fake-local-only', prompt: 'fixture',
-        baseAttached: false })).rejects.toThrow('plugin_core_failed')
+        baseAttached: false })).rejects.toThrow('plugin_core_malformed_response')
       const files = await readdir(join(root, runId, 'diagnostics'))
       const stream = JSON.parse(await readFile(join(root, runId, 'diagnostics', files.find(file => file.endsWith('.stream.json'))!), 'utf8'))
       expect(stream.requests[0].tools[0]).toMatchObject({ wireJsonValid: false, sdkJsonValid: false, assembly: 'identical' })

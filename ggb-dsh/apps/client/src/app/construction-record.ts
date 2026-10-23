@@ -27,6 +27,7 @@ export const ConstructionRecord = defineComponent({
         h('button', { type: 'button', 'data-test': 'download-construction', onClick: download }, text(props.locale, 'downloadRecord')),
         h('span', { role: 'status' }, feedback.value),
       ]),
+      h('p', { class: 'construction-note' }, text(props.locale, 'constructionScopeNote')),
       h('pre', [h('code', props.report.text)]),
     ])
   },

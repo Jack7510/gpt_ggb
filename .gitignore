@@ -41,3 +41,4 @@ ggb-plugins/
 
 # Also match a local symlink to the sibling checkout.
 /ggb-plugins
+.archify/

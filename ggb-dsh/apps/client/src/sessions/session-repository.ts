@@ -1,4 +1,4 @@
-import { DEFAULT_SESSION_TITLES } from './session-title.js'
+import { DEFAULT_SESSION_TITLES, GENERIC_IMAGE_TITLES } from './session-title.js'
 import type { PluginCoreConstructionRecord } from '@ggb-copilot/application/browser'
 import type { ClientDatabase } from '../persistence/indexeddb.js'
 
@@ -116,6 +116,18 @@ export class SessionRepository {
     let changed = false
     await this.db.update<LocalConversationSession>('sessions', sessionId, current => {
       if (current === null || current.titleSource !== undefined || !DEFAULT_SESSION_TITLES.has(current.title)) return current
+      changed = true
+      return { ...current, title, titleSource: 'automatic', updatedAt }
+    })
+    return changed
+  }
+
+  /** Upgrade one generic image title after a completed run; manual titles stay authoritative. */
+  public async applyTopicTitle(sessionId: string, title: string, updatedAt: string): Promise<boolean> {
+    let changed = false
+    await this.db.update<LocalConversationSession>('sessions', sessionId, current => {
+      if (current === null || current.titleSource !== 'automatic'
+        || !GENERIC_IMAGE_TITLES.has(current.title)) return current
       changed = true
       return { ...current, title, titleSource: 'automatic', updatedAt }
     })

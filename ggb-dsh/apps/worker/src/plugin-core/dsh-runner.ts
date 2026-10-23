@@ -8,6 +8,7 @@ import { DeepSeekHarness, type DeepSeekHarnessOptions, type HarnessNotification,
 import { sdkTurnOutcome, type RunId } from '@ggb-copilot/application'
 import type { PluginCoreToolGatewayServer } from './tool-gateway-server.js'
 import { PluginCoreEvidenceStore, type TurnEvidence } from './evidence.js'
+import { sdkProgress } from './sdk-progress.js'
 import { writeHostPolicy } from './host-policy.js'
 
 interface PluginCoreHarnessPort {
@@ -78,7 +79,7 @@ export class PluginCoreDshRunner {
     const image = request.image === undefined ? undefined : pluginCoreImageSchema.parse(request.image)
     const turnId = request.turnId ?? randomUUID()
     const home = join(this.options.dshHomeRoot, request.runId, turnId)
-    const toolToken = this.tools.openTurn(request.runId, turnId, request.epoch, request.signal)
+    const toolToken = this.tools.openTurn(request.runId, turnId, request.epoch, request.signal, request.prompt)
     const evidence = this.evidence.begin(request.runId, turnId, request.epoch,
       [request.providerKey, toolToken, ...(image === undefined ? [] : [image.dataBase64])])
     let harness: PluginCoreHarnessPort | null = null
@@ -96,13 +97,15 @@ export class PluginCoreDshRunner {
       const prompt = `${this.systemPromptFor(request.baseAttached)}\n\nTask:\n${request.prompt}`
       const content: string | SdkPromptContentBlock[] = image === undefined ? prompt
         : [{ type: 'text', text: prompt }, { type: 'image', data: image.dataBase64, mimeType: image.mediaType }]
-      result = await this.runBounded(harness, content, turnId,
+      result = await this.runBounded(request.runId, harness, content, turnId,
         request.timeoutMs ?? DEFAULT_TURN_TIMEOUT_MS, evidence, request.signal)
       evidence.returned(result)
       const outcome = sdkTurnOutcome({ events: result.events ?? [] })
       if (outcome.kind !== 'completed' && outcome.kind !== 'missing') {
         const code = outcome.kind === 'aborted' ? 'plugin_core_cancelled'
-          : outcome.kind === 'max-tokens' ? 'plugin_core_max_tokens' : 'plugin_core_failed'
+          : outcome.kind === 'max-tokens' ? 'plugin_core_max_tokens'
+          : outcome.failureCode === 'MALFORMED_RESPONSE' ? 'plugin_core_malformed_response'
+          : 'plugin_core_failed'
         throw Object.assign(new Error(code), { code: outcome.failureCode ?? outcome.kind })
       }
     } catch (error) { failure = error }
@@ -188,7 +191,7 @@ export class PluginCoreDshRunner {
     return `Host task facts:\n${state}\nFor either task, ggb_inspect({reference: topic}) can read fixed bundled knowledge topics without a base.`
   }
 
-  private async runBounded(harness: PluginCoreHarnessPort, prompt: string | SdkPromptContentBlock[], turnId: string,
+  private async runBounded(runId: RunId, harness: PluginCoreHarnessPort, prompt: string | SdkPromptContentBlock[], turnId: string,
     timeoutMs: number, evidence: TurnEvidence, signal?: AbortSignal): Promise<RunResult> {
     if (signal?.aborted === true) throw new Error('plugin_core_cancelled')
     let timer: ReturnType<typeof setTimeout> | undefined
@@ -201,9 +204,11 @@ export class PluginCoreDshRunner {
         if (signal.aborted) onAbort()
       }
     })
+    const progress = sdkProgress(turnId, fact => this.options.state?.reportProgress(runId, fact))
     try { return await Promise.race([harness.run(prompt, { sessionId: turnId,
-      onNotification: notification => evidence.notification(notification) }), stopped]) }
+      onNotification: notification => { progress.notification(notification); evidence.notification(notification) } }), stopped]) }
     finally {
+      progress.close()
       if (timer !== undefined) clearTimeout(timer)
       if (signal !== undefined && onAbort !== undefined) signal.removeEventListener('abort', onAbort)
     }

@@ -218,6 +218,25 @@ describe('plugin-core PWA integration', () => {
       expect((await runtime.view(id)).title).toBe('Image construction')
     } finally { runtime.dispose() }
   })
+  it('upgrades a generic image title from the completed report', async () => {
+    const { runtime, fetchMock } = harness()
+    const completed = { ...view('completed'), finalResponse: '我根据题目完成了构图：\n- 已绘制圆 c=Circle(O,3)，圆心 O=(0,0)。' }
+    fetchMock.mockImplementation(async (input, init) => {
+      if (init?.method === 'POST') return new Response(JSON.stringify({ runId, phase: 'accepted' }))
+      if (String(input).includes('/artifacts/')) return new Response(Buffer.from('PKfake'))
+      if (String(input).includes('/events')) return new Response(sseFrame('plugin_core.ready', {
+        schemaVersion: 1, type: 'plugin_core.ready', generation: 'g', run: completed, cursor: 2, terminal: true,
+      }))
+      return new Response(JSON.stringify(completed))
+    })
+    try {
+      await runtime.setProviderKey('fake')
+      const id = await runtime.createSession()
+      await runtime.sendMessage(id, '请根据图片中的题目完成几何构图。', { mediaType: 'image/png',
+        dataBase64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=' })
+      await vi.waitFor(async () => expect((await runtime.view(id)).title).toBe('圆 c=Circle(O,3)，圆心 O=(0,0)'))
+    } finally { runtime.dispose() }
+  })
   it('persists the accepted construction record per run and restores it when switching sessions offline', async () => {
     const { runtime, fetchMock, db } = harness()
     const binding = { runId, turnId: '11111111-1111-4111-8111-111111111111', requestId: '22222222-2222-4222-8222-222222222222',

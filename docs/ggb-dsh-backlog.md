@@ -22,11 +22,38 @@
 | PC-03 | P2 | 观察 | `ellipse-foci` 未交付 | 同上 | 同上 |
 | PC-04 | P1 | 阻塞 | 目标环境 PostgreSQL 备份与 017/018 演练 | 需要目标数据库、备份窗口与明确授权 | 备份完成、018 已在目标库记录、API/Worker 启动通过 schema admission |
 | PC-05 | P3 | 待开始 | 目标环境真实 Provider 批量复跑 | 本机仅完成 5/7；目标环境尚未复跑 | 明确授权后，在目标环境以新 `output/` 目录完成批次并保留证据 |
-| PC-06 | P1 | 待验证 | 首次 MALFORMED_RESPONSE 的历史归因 | 已补齐双侧流证据并通过一次真实 PWA 画圆；本次参数合法且 SDK 组装一致。首次失败没有原始流，无法最终归因，不能宣称修复了已证实的 SDK 组装错误 | 发生下一次已授权运行时用新证据定位；不自动重放，不修补非法 JSON |
+| PC-06 | P1 | 待验证 | 首次 MALFORMED_RESPONSE 的历史归因 | 已补齐双侧流证据并通过一次真实 PWA 画圆；本次参数合法且 SDK 组装一致。首次失败没有原始流，无法最终归因，不能宣称修复了已证实的 SDK 组装错误 | 发生下一次已授权运行时用新证据定位；只允许无 build 的安全重试，不修补非法 JSON |
 | IP-C | P0 | 待验证 | 部署层 Worker 崩溃后的资源回收 | 本机真实 GeoGebra 交付和主动取消已验收；容器/cgroup/systemd 崩溃回收尚未验收 | 在授权目标环境终止 Worker，证明部署层回收其浏览器子树且不自动重放 |
 | IP-E | P1 | 待验证 | 安装插件真实 Provider 与部署验收 | 本机完整供应、doctor、真实构图/取消及 mock Harness 的 PWA 全链已通过；一次真实 PWA 画圆已通过；两轮正多边形失败已定位到 Provider 非法 JSON，当前包一次真实正多边形交付通过；生产环境未验收 | 分别授权后完成复杂题回归、目标环境发布与部署层回收验收 |
 
 ## 2. 已完成（不再作为当前工作）
+
+- Malformed response 安全重试（2026-10-23）：`MALFORMED_RESPONSE` 且无 `ggb_build`、证据未截断时重跑一次模型 turn；
+  `hasBuildCall` 取代任意 tool call 保护，只读 inspect/check 可重复；新增 `plugin_core_malformed_response` 错误码。
+  已有构建事实或第二次 malformed 仍失败关闭；宿主测试覆盖只读重试、build 阻断和错误码。
+- 小块请求、局部修复和引用式构建（2026-10-23）：安装插件新增 ggb_request，每次参数上限 2048 UTF-8 字节，
+  按完整条目追加、替换、删除和分页读取；原始 prompt 保留，图片文字可分段转写。
+  check 检查完整组装请求并返回不可变检查句柄，build 使用该句柄；写入失败不改变版本，过期/跨 turn 句柄和并发版本冲突在构建配额预留前拒绝。
+  成功修改同时撤销旧交付候选，防止未构建新草稿却交付旧文件；回执、可信交付及构造脚本绑定最终完整请求摘要。
+  CAS、initial、嵌套独立 expected、原题 source、交互与完整核验均保留；不增加 shell、文件路径或非法 JSON 自动修补。
+  工具协议升级至 3，API/Worker 内部通道为 8，executor/执行上下文/回执仍为 3/2/2；开发 TGZ 与完整文件摘要锁已同步。
+  草稿仅在当前认证 run/turn/epoch 内存中保存，关闭后不恢复、不自动重放。
+  `MALFORMED_RESPONSE` 的安全重试只覆盖“证据未截断、没有 ggb_build”的 turn；只读 inspect/check 可重复，已有 build 不重放。
+  插件完整离线测试 141 项通过；宿主 674 项通过、5 项默认跳过。TypeScript、Client Vue/bundle、共享 lint、质量和工作区边界检查通过。
+  最终 TGZ 在两个隔离真实 SDK Server 中发现准确四工具及 Worker Skill；Provider 请求 0、网络尝试 0、浏览器启动 0。
+  证据：output/draft-plugin-tests.log、draft-offline-regression.log、draft-sdk/result.json 及其他 draft-*.log。
+  本轮未调用真实 Provider、真实 GeoGebra 或部署生产；格式错误率、工具调用数与端到端耗时改善尚未实测。
+
+- Review 四项修复（2026-10-23）：实时 SDK `step/start / step/end` 经 Worker、API、SSE 进入 Client；只显示执行事实，时间仅用于耗时显示。
+  session/步号关联、重复与倒退、关闭后迟到通知有反例覆盖；SDK 返回的历史事件不补发为实时进度。
+  内部通道升级为 7，API/Worker/Client 和兼容锁同步；旧 v6 握手拒绝，未新增数据库 DDL。
+  构建结束、执行异常和后续读取/模型事实保留最近构建槽位；超额拒绝不借用前次构建身份。
+  构造脚本绑定 accepted request 与已验证报告，保留 CAS 实际物化赋值及逐步骤 `SetCoords`；不从当前值反推依赖定义。
+  自动标题保留数学表达式的逗号和冒号，手工命名优先；图片交付后的主题标题有运行时集成测试。
+  最终离线回归 664 项通过、5 项默认跳过；包含 mock Harness 通知、真实本机 HTTP/Unix socket/SSE、
+  构建开始及拒绝后的两次重连、终态保护、安装包执行器的合成可信交付和会话恢复。
+  TypeScript、Client Vue 类型与 bundle、共享 lint、质量及工作区边界 2 项检查通过。
+  证据在 `output/review-four-fixes-*.log`；未调用真实 Provider、真实 GeoGebra 或部署生产环境。
 
 - 工具级真实进度（2026-10-23）：网关发布三工具的实际开始、接受、拒绝及执行异常，经认证 run 连接、API 事件存储和 SSE 进入 Client。
   内部通道升级为 6，握手双向验证版本；发行兼容锁同步。进度不会结束最终结果 waiter，不包含工具参数、模型文本或百分比。

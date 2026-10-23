@@ -99,7 +99,7 @@ describe('owned build failure projection', () => {
     const runner = await InstalledPluginCoreRunner.load({ pluginRoot: installedRoot, outputRoot: root,
       packageIntegrity: 'a'.repeat(64), state: new PluginCoreExecutionState(root) })
     if (mode === 'aborted') controller.abort()
-    const result = await runner.build({}, runId, controller.signal, undefined, { protocolVersion: 2,
+    const result = await runner.build({}, runId, controller.signal, undefined, { protocolVersion: 3,
       requestId: randomUUID(), toolCallId: randomUUID(), turnId: randomUUID(), epoch: 1,
       runId, buildId: randomUUID(), toolName: 'ggb_build', arguments: {} })
     expect(result.error?.code).toBe('plugin_build_execution_failed')
@@ -124,14 +124,14 @@ describe('owned build failure projection', () => {
     const runner = await InstalledPluginCoreRunner.load({ pluginRoot: installedRoot, outputRoot: root,
       packageIntegrity: 'a'.repeat(64), state })
     const gateway = new PluginCoreGateway(runner, { state, evidence })
-    const result = await gateway.dispatch({ protocolVersion: 2, runId, turnId, epoch: 1,
+    const result = await gateway.dispatch({ protocolVersion: 3, runId, turnId, epoch: 1,
       requestId: randomUUID(), toolCallId: randomUUID(), toolName: 'ggb_build', arguments: {} })
     expect(result).toMatchObject({ status: 'rejected', errors: [{ code: 'execution_failed',
       message: 'poly not created [redacted] [server_path]' }] })
     expect(state.candidate(runId)).toBeNull()
     expect(JSON.stringify(result)).not.toContain('stderrTail')
     expect(JSON.stringify(result)).not.toContain('secret-provider-value')
-    const knowledge = await gateway.dispatch({ protocolVersion: 2, runId, turnId, epoch: 1,
+    const knowledge = await gateway.dispatch({ protocolVersion: 3, runId, turnId, epoch: 1,
       requestId: randomUUID(), toolCallId: randomUUID(), toolName: 'ggb_inspect', arguments: { reference: 'interactions' } })
     expect(knowledge).toMatchObject({ status: 'accepted', result: { topic: 'interactions' } })
     expect(JSON.stringify(knowledge)).toContain('20')

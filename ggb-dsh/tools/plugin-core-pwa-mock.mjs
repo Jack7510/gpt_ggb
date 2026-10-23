@@ -38,7 +38,7 @@ const externalRequests = []
 const pageErrors = []
 const plans = [
   { protocolVersion: 2, prompt: 'Create point P', locale: 'en', plan: {
-    program: [{ op: 'freePoint', id: 'P', x: 0, y: 0 }],
+    program: [{ op: 'native', id: 'P', source: 'P=(0,0)', mode: 'algebra' }],
     requirements: [{ id: 'p', source: 'point P', checks: [{ kind: 'exists', subjects: ['P'], scope: 'initial' }] }], interactions: [] } },
   { protocolVersion: 2, prompt: 'Create Q=(1,1), keep P', locale: 'en', plan: {
     program: [{ op: 'native', id: 'Q', source: 'Q=(1,1)', mode: 'algebra', outputs: ['Q'] }],
@@ -73,7 +73,22 @@ try {
         previous.set(key, process.env[key]); process.env[key] = value
       }
       try {
-        const result = await createTool('ggb_build').execute({ request: plans[index] }, { signal: abort.signal })
+        const call = (name, args) => createTool(name).execute(args, { signal: abort.signal })
+        const plan = plans[index]
+        let revision = (await call('ggb_request', { action: 'create', locale: plan.locale })).result.revision
+        const sections = {
+          program: plan.plan.program.map(({ op, ...step }) => step),
+          requirements: plan.plan.requirements.map(({ checks, ...requirement }) => requirement),
+          checks: plan.plan.requirements.flatMap(r => r.checks.map(c => ({ requirementId: r.id, ...c }))),
+          interactions: plan.plan.interactions,
+        }
+        for (const [section, items] of Object.entries(sections)) {
+          if (!items.length) continue
+          revision = (await call('ggb_request', { action: 'append', revision, section, items })).result.revision
+        }
+        const checked = await call('ggb_check', { revision })
+        assert.equal(checked.status, 'accepted', JSON.stringify(checked))
+        const result = await call('ggb_build', { checkedRequestId: checked.result.checkedRequestId })
         toolResults.push(result)
         assert.equal(result.status, 'accepted', JSON.stringify(result))
         return { finalResponse: 'Mock Harness; real GeoGebra build completed.',

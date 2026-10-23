@@ -3,7 +3,7 @@ import type { PresentationLocale } from '@ggb-copilot/application/browser'
 export type UiTextKey = keyof typeof EN
 
 const EN = {
-  copyRecord: 'Copy record', constructionRecord: 'Construction steps and changes', downloadRecord: 'Download record', constructionDownloadFailed: 'Could not download the record.',
+  copyRecord: 'Copy record', constructionRecord: 'GGB construction script', constructionScopeNote: 'Geometry commands only; colors, line styles and view are not included.', downloadRecord: 'Download record', constructionDownloadFailed: 'Could not download the record.',
   buildNotAttempted: 'No build attempted', buildStructureRejected: 'Request structure rejected',
   buildExecutionFailed: 'Build execution failed', buildVerificationFailed: 'Verification failed', lastBuild: 'Last build',
   imageReading: 'Reading image…', attachImage: 'Attach image', removeImage: 'Remove image', imageOnlyPrompt: 'Construct the geometry described in this image.',
@@ -27,13 +27,13 @@ const EN = {
   keyRequiredNotice: 'A DeepSeek Key is required. Open Settings to save it in this browser.',
   ready: 'Ready', readyDetail: 'Describe a geometry task to begin.', keyRequired: 'DeepSeek Key required', keyRequiredDetail: 'Open Settings to save a key only in this browser.',
   completed: 'Construction completed', completedDetail: 'GeoGebra execution and validation have finished.', cancelled: 'Task stopped', cancelledDetail: 'The cancellation request was accepted.', attention: 'Run needs attention', failedDetail: 'The server could not complete this run.',
-  working: 'Working', workingDetail: 'Building the construction. Elapsed time updates every second.',
+  working: 'Working', workingDetail: 'Building the construction. Elapsed time updates every second.', planningDetail: 'Waiting for execution events…',
   ggbScript: 'GGB script',
   constructionComplete: 'Canvas committed', constructionSteps: 'Construction steps', scriptMissing: '_No GGBScript was generated for display._', statistics: 'Run statistics', elapsed: 'Total time', seconds: 'seconds', tokens: 'Tokens (input + output)', knownTokens: 'Known tokens (input + output)', unknownUsageCalls: 'calls with unknown usage', input: 'input', output: 'output', modelCalls: 'model calls',
 } as const
 
 const ZH: Record<UiTextKey, string> = {
-  copyRecord: '复制记录', constructionRecord: '构造步骤与修改记录', downloadRecord: '下载记录', constructionDownloadFailed: '无法下载构造记录。',
+  copyRecord: '复制记录', constructionRecord: 'GGB 构造脚本', constructionScopeNote: '仅包含几何构造命令；颜色、线型和视图不包含在内。', downloadRecord: '下载记录', constructionDownloadFailed: '无法下载构造记录。',
   buildNotAttempted: '未执行构建', buildStructureRejected: '请求结构被拒绝',
   buildExecutionFailed: '构建执行故障', buildVerificationFailed: '核验失败', lastBuild: '最后一次构建',
   imageReading: '正在读取图片…', attachImage: '添加图片', removeImage: '删除图片', imageOnlyPrompt: '请根据图片中的题目完成几何构图。',
@@ -56,7 +56,7 @@ const ZH: Record<UiTextKey, string> = {
   keyRequiredNotice: '需要 DeepSeek Key。请在设置中保存到此浏览器。',
   ready: '准备就绪', readyDetail: '描述一个几何任务以开始。', keyRequired: '需要 DeepSeek Key', keyRequiredDetail: '请在设置中仅保存到此浏览器。',
   completed: '构图已完成', completedDetail: 'GeoGebra 执行和校验已完成。', cancelled: '任务已停止', cancelledDetail: '停止请求已提交，任务不会再继续执行。', attention: '运行需要处理', failedDetail: '服务器未能完成本次运行。',
-  working: '正在构图', workingDetail: '正在构图，耗时每秒更新。',
+  working: '正在构图', workingDetail: '正在构图，耗时每秒更新。', planningDetail: '等待执行事件…',
   ggbScript: 'GGB 脚本',
   constructionComplete: '画布已提交', constructionSteps: '作图步骤', scriptMissing: '_没有生成可展示的 GGBScript。_', statistics: '本轮统计', elapsed: '总耗时', seconds: '秒', tokens: 'Token（输入+输出）', knownTokens: '已知 Token（输入+输出）', unknownUsageCalls: '次调用用量未知', input: '输入', output: '输出', modelCalls: '模型调用',
 }

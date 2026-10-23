@@ -21,7 +21,7 @@ export interface InstalledPlugin {
 export async function loadInstalledPlugin(root: string, lockPath: string): Promise<InstalledPlugin> {
   const lock = JSON.parse(await readFile(lockPath, 'utf8')) as PluginReleaseLock
   const required = ['package.json', 'dsh/installation.js', 'dsh/server.patch.yml', 'dsh/server.js',
-    'dist/src/host-protocol.js', 'dist/src/execution-contract.js', 'dist/src/check.js', 'dsh/executor.js', 'dist/src/cli.js', 'skills/ggb-construction/worker.md']
+    'dist/src/host-protocol.js', 'dist/src/draft-requests.js', 'dist/src/draft-arguments.js', 'dist/src/execution-contract.js', 'dist/src/check.js', 'dsh/executor.js', 'dist/src/cli.js', 'skills/ggb-construction/worker.md']
   if (!lock.files || required.some(ref => !/^[a-f0-9]{64}$/.test(lock.files[ref] ?? ''))
     || !/^[a-f0-9]{64}$/.test(lock.archiveSha256)) throw new Error('plugin_core_release_lock_invalid')
   const canonical = await realpath(root)

@@ -235,7 +235,9 @@ export class PluginCoreService {
     const message = aborted ? 'The plugin-core turn was cancelled.'
       : code === 'plugin_core_max_tokens'
         ? 'The model reached the output-token limit before completing the turn.'
-        : 'The plugin-core turn did not complete.'
+        : code === 'plugin_core_malformed_response'
+          ? 'The model returned malformed tool arguments; no tool or build was executed.'
+          : 'The plugin-core turn did not complete.'
     let usage = results.length === 0 ? null : combineUsage(results)
     if (error instanceof PluginCoreTurnError && usage?.calls === 0) usage = null
     if (usage !== null) usage = withUnknownUsage(usage, attempts.truncated)
@@ -268,8 +270,8 @@ export class PluginCoreService {
   }
 
   /**
-   * Retry one malformed provider turn only when no tool call ran. The first
-   * attempt still contributes usage accounting; a tool-call turn is never replayed.
+   * Retry one malformed provider turn only when no build ran. Read-only
+   * inspect/check calls are safe to repeat; build turns are never replayed.
    */
   private async turnWithRetry(input: { readonly runId: RunId; readonly deliveryContract?: 'legacy' | 'receipt-v1'; readonly providerKey: string;
     readonly prompt: string; readonly image?: PluginCoreImage }, controller: AbortController, deadline: number,
@@ -279,7 +281,7 @@ export class PluginCoreService {
     } catch (error) {
       if ((this.options.retryMalformedResponse ?? false) === false
         || !isMalformedResponse(error) || error.eventsTruncated
-        || hasToolCall(error.partial) || this.state.buildFailure(input.runId)?.kind !== 'not_built') throw error
+        || hasBuildCall(error.partial) || this.state.buildFailure(input.runId)?.kind !== 'not_built') throw error
       attempts.results.push(error.partial)
       attempts.truncated ||= error.eventsTruncated
       return await this.turn(input, controller, deadline, baseAttached, epoch)
@@ -368,10 +370,11 @@ function isMalformedResponse(error: unknown): error is PluginCoreTurnError {
     && failureCode(error.cause) === 'MALFORMED_RESPONSE'
 }
 
-function hasToolCall(result: RunResult): boolean {
+/** Only a build can create an accepted candidate; inspect/check are read-only. */
+function hasBuildCall(result: RunResult): boolean {
   const events = Array.isArray(result.events) ? result.events : []
   return events.some(event => event.type === 'tool/call'
-    || event.type === 'tool/result')
+    && (event.data as { name?: unknown } | undefined)?.name === 'ggb_build')
 }
 
 function modelCalls(results: readonly RunResult[], truncated = false): {
