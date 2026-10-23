@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head><meta charset="UTF-8" /><title>DSH ↔ GeoGebra spike</title></head>
+  <body style="font:16px sans-serif; margin:16px">
+    <label for="prompt">任务</label>
+    <input id="prompt" style="width:480px" value="请在 GeoGebra 中画点 A=(1,2)。" />
+    <button id="start" disabled>开始</button>
+    <p id="status">正在加载 GeoGebra applet…</p>
+    <pre id="result"></pre>
+    <div id="canvas" style="width:900px;height:600px;border:1px solid #aaa"></div>
+    <script type="module" src="/spike-loop.ts"></script>
+  </body>
+</html>

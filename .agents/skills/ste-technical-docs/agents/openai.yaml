@@ -1,0 +1,4 @@
+interface:
+  display_name: "STE 技术文档"
+  short_description: "用 ASD-STE100 原则约束技术文档，并明确架构、流程、状态与契约"
+  default_prompt: "使用 $ste-technical-docs 编写或修订技术文档，应用 ASD-STE100 文字约束，并给出架构图、流程图、状态机和契约。"

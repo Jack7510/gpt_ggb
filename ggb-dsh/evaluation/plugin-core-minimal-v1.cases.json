@@ -1,0 +1,164 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "plugin-core-minimal-v1",
+  "description": "plugin-core 真实构图案例集：tier=core 是 5 案例覆盖集，tier=extended 是其余已记录案例。文件只含 prompt、核验要点与分类，不含 Key、runToken、画布 XML 或用户数据。历史 Native 证据引用已删除；重跑必须写入新的 output 目录。",
+  "invocation": {
+    "workingDirectory": "ggb-dsh",
+    "singleCase": "node tools/plugin-core-integrated-batch.mjs --authorized --case-id <cases[].caseId> [--out <dir>] [--plugin-root <dir>]",
+    "batch": "node tools/plugin-core-integrated-batch.mjs --authorized [--case-id id1,id2] [--out <dir>]",
+    "notes": [
+      "脚本拒绝在没有 --authorized 时发起 Provider 调用。",
+      "案例的 prompt 由本清单按 --case-id 提供；未知 caseId 拒绝运行。",
+      "结果写入 --out 指定的新目录；不要在旧 output 目录上复用证据。",
+      "Provider Key 从进程环境 DEEPSEEK_API_KEY 读取，不进入日志、产物或 Git。",
+      "真实调用会产生费用；必须先取得明确授权。"
+    ]
+  },
+  "cases": [
+    {
+      "caseId": "circle-inscribed-polygon",
+      "title": "圆 + 内接正多边形（整数边数滑块）",
+      "tier": "core",
+      "prompt": "画一个圆，并在圆的内部做一个内接正多边形（边数由整数滑块 n 控制，范围 3 到 12）",
+      "verified": [
+        "历史样本使用正六边形；当前 prompt 允许 n=3..12，验收按实际 n 检查顶点数与正多边形不变量",
+        "单轮 24 项检查全通过（verdict.passed=true）",
+        "半径 3、6 个采样顶点全部落圆（onCircleMaxError≈1e-15）、边长与圆心角相等",
+        "settlement applied/passed/committed，恰 1 笔 settled 事务，实时画布摘要=已结算摘要"
+      ]
+    },
+    {
+      "caseId": "circle-only",
+      "title": "仅作圆（多边形检查不适用）",
+      "tier": "core",
+      "prompt": "draw a circle.",
+      "verified": [
+        "completed、实时画布摘要=已结算摘要",
+        "settlement applied/passed/committed",
+        "圆与签名检查全过；多边形检查对该题不适用（记录中的 polygon_* 失败为类别不适用）"
+      ]
+    },
+    {
+      "caseId": "two-goals-red-point",
+      "title": "双目标：作点 A=(1,2) 并红色填充（呈现目标）",
+      "tier": "core",
+      "prompt": "两个目标：(1) 作点 A=(1,2)；(2) 把点 A 用红色填充。每个目标各算一个。",
+      "verified": [
+        "双目标 run completed、13 项 store 检查全通过、实时画布摘要=已结算摘要",
+        "settlement validationStatus=passed（红色填充由运行内谓词账本核验）",
+        "近重复题「作点 A=(1,2)。再把点 A 用红色填充。」合并为同一案例"
+      ]
+    },
+    {
+      "caseId": "general-horse-explanation",
+      "title": "将军饮马：讲解 + 作图（讲解/关系目标）",
+      "tier": "core",
+      "prompt": "讲解“将军饮马”的原理，并画出它的几何图形。",
+      "verified": [
+        "completed、13 项 store 检查全通过、实时画布摘要=已结算摘要",
+        "画布采样 11 个对象（点、直线、线段混排）",
+        "settlement applied/passed/committed"
+      ]
+    },
+    {
+      "caseId": "dashed-reflection-continuation",
+      "title": "对称点 + 虚线续做（r25 lineStyle，同 session 两轮）",
+      "tier": "core",
+      "prompt": "画一条直线 l：y=0，再画点 A(-2,3) 与 B(4,2)，并画出 A 关于 l 的对称点 A2。",
+      "verified": [
+        "主轮 + 续做轮均 completed，两轮实时画布摘要都=各自已结算摘要",
+        "续做后画布含 3 条 lineStyle=1（虚线）线段，以及 l 上的点 P1 与对称点 A2",
+        "两轮 settlement 均 applied/passed/committed，无二次副作用"
+      ]
+    },
+    {
+      "caseId": "ellipse-foci",
+      "title": "椭圆 + 焦点 + 椭圆上点",
+      "tier": "extended",
+      "prompt": "椭圆 x^2/9 + y^2/5 = 1，左、右焦点分别为 F 和 F'，点 P 在椭圆上且在 x 轴上方。",
+      "verified": [
+        "completed、13 项 store 检查全通过、实时画布摘要=已结算摘要",
+        "settlement applied/passed/committed",
+        "圆/多边形几何检查对该题不适用（画布无对应对象）"
+      ]
+    },
+    {
+      "caseId": "circle-polygon-fill-continuation",
+      "title": "圆 + 内接正多边形，再续做蓝色填充（两轮）",
+      "tier": "extended",
+      "prompt": "画一个圆 circ1，并在圆内作内接正多边形",
+      "verified": [
+        "主轮 12 项画布检查全通过（6 顶点全部落圆、等边、等圆心角）",
+        "续做轮 completed、13 项 store 检查全通过、实时画布摘要=已结算摘要、零拒绝",
+        "两轮 settlement 均 applied/passed/committed"
+      ]
+    }
+  ],
+  "knownFailures": [
+    {
+      "runIds": [
+        "run_b9085795-ee26-4d4f-9f18-2b7eb2cc6d1b"
+      ],
+      "detail": "completed 且谓词 passed，但多边形未内接（Polygon(A,O,n) 用圆心当顶点，offCirclePoints=[C,D,E]）——几何检查如实判失败；这是「completed≠画对」的诚实样本，重跑该题时以此类几何检查为准。"
+    },
+    {
+      "runIds": [],
+      "detail": "同题失败轮（outcome=failed、摘要未匹配）。"
+    },
+    {
+      "runIds": [
+        "run_2a062c71-e4cd-40d6-a5d8-41182125a2b8",
+        "run_97b00247-ac78-481b-a6ad-5762cf5d5dba"
+      ],
+      "detail": "主轮成功；续做轮（蓝色填充）completed 但实时画布摘要≠已结算摘要（thenLive=false）。"
+    },
+    {
+      "runIds": [
+        "run_e5657299-86bd-4e2a-bb06-d030220c5c2e",
+        "run_54080dc4-3112-4bf6-a806-5eb5e49a22e7"
+      ],
+      "detail": "将军饮马主轮成功；then 虚线续做轮 failed。"
+    },
+    {
+      "runIds": [
+        "run_9c207a75-a009-41cc-876c-b3d6f720d090",
+        "run_7b810a19-10c5-4048-a906-a21a2f816b5a"
+      ],
+      "detail": "对称+虚线续做题的首轮尝试：then 轮 failed；其后 scenario-2/-3 两轮均成功（见 dashed-reflection-continuation）。"
+    },
+    {
+      "runIds": [],
+      "detail": "将军饮马 + 虚线续做：主轮与 then 轮均 failed。"
+    },
+    {
+      "runIds": [],
+      "detail": "六边形题首次尝试 failed（后续成功轮见 circle-inscribed-polygon）。"
+    }
+  ],
+  "excluded": [
+    {
+      "reason": "页面/浏览器被关闭（Target closed），无有效检查结果。"
+    },
+    {
+      "reason": "对照轮：探针在 applet 上抛 GeoGebra IllegalArgument，无有效核验。"
+    },
+    {
+      "reason": "canary 装置自检（零模型调用），非任务案例。"
+    },
+    {
+      "reason": "canary 装置自检。"
+    },
+    {
+      "reason": "固定测试命令的只读画布探针（圆类型/半径/中心），非模型任务 run。"
+    },
+    {
+      "reason": "同上，升级后画布探针，非模型任务 run。"
+    },
+    {
+      "reason": "仅有截图，无 prompt/runId/断言，证据不足。"
+    },
+    {
+      "reason": "仅有截图，无 prompt/runId/断言，证据不足。"
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+__pycache__/
+.chroma/
+access.log
+error.log
+logs/
+.env
+.DS_Store
+*.log
+*.db
+txt/
+csv*
+xml/
+*.ggb
+*.rar
+*.csv
+doc/
+*.zip
+*.docx
+*.xlsx
+*.pdf
+node_modules/
+# Sandbox-local package-manager redirects (pnpm store/temp/cache), never committed.
+.data/
+.cache/
+.tmp/
+notebook/
+db/
+data/
+
+.playwright-cli/
+.pnpm-store/
+server-new/
+tmp/
+output/
+.trae/
+.pytest_cache/
+.worktrees/
+dist/
+# Local sibling plugin checkout; the release distribution is vendored under ggb-dsh/vendor/.
+ggb-plugins/
+
+# Also match a local symlink to the sibling checkout.
+/ggb-plugins

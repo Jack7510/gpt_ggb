@@ -1,0 +1,279 @@
+import { describe, expect, it, vi } from 'vitest'
+import { createDirectAppletPort } from '../src/geogebra/host.js'
+import { ClientRuntime, type ClientRuntimeOptions } from '../src/app/runtime.js'
+import type { CanvasSnapshot, GeogebraAppletPort } from '../src/geogebra/host.js'
+import { createMemoryDatabase } from '../src/persistence/indexeddb.js'
+import { createMemoryArtifactStore } from '../src/persistence/opfs-artifacts.js'
+
+const runId = 'run_00000000-0000-4000-8000-000000000201'
+const artifactId = 'c'.repeat(64)
+
+function view(phase: 'running' | 'completed') {
+  return {
+    runId, engine: 'plugin_core' as const, phase,
+    stopRequested: false,
+    finalResponse: phase === 'completed' ? 'done' : null,
+    failure: null,
+    delivery: phase === 'completed' ? {
+      id: artifactId,
+      artifacts: [{
+        artifactId, kind: 'result_ggb' as const, sizeBytes: 6,
+        sha256: 'c'.repeat(64), contentType: 'application/octet-stream',
+      }],
+      verification: { construction: { status: 'passed' } },
+    } : null,
+    usage: phase === 'completed' ? {
+      calls: 1, inputTokens: 10, outputTokens: 5, reasoningTokens: 0,
+      cacheReadTokens: 0, complete: true, source: 'sdk' as const,
+    } : null,
+    durationMs: phase === 'completed' ? 100 : null,
+    createdAt: '2026-10-17T00:00:00.000Z',
+    events: { earliestEventId: 1, latestEventId: phase === 'completed' ? 2 : 1 },
+    terminal: phase === 'completed',
+  }
+}
+
+function sseFrame(eventName: string, data: unknown): string {
+  return `event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`
+}
+
+function harness(readyOnly = false, suppliedApplet?: GeogebraAppletPort) {
+  let active: CanvasSnapshot = {
+    canvasVersion: 'v0', contentBase64: 'ZW1wdHk=', contentDigest: 'empty',
+  }
+  let objects: unknown[] = []
+  const applet: GeogebraAppletPort = suppliedApplet ?? {
+    ready: async () => undefined,
+    currentVersion: async () => active.canvasVersion,
+    context: async () => ({ objects: objects as never, selectedLabels: [] }),
+    snapshot: async () => active,
+    restore: async () => {
+      // GeoGebra re-serializes the file, so the canvas copy differs from the
+      // delivered artifact. The download must still return the artifact bytes.
+      active = {
+        canvasVersion: 'v1', contentBase64: Buffer.from('reserialized').toString('base64'),
+        contentDigest: 'restored',
+      }
+      objects = [{ label: 'A', kind: 'point', definition: '(0,0)' }]
+    },
+    reset: async () => { active = { canvasVersion: 'v0', contentBase64: 'ZW1wdHk=', contentDigest: 'empty' } },
+    setSpace: async () => undefined,
+    setViews: vi.fn(async () => undefined),
+    resize: async () => undefined,
+    dispose: () => undefined,
+  }
+  const requests: { method: string; url: string; body?: unknown }[] = []
+  let getCount = 0
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    requests.push({ method: init?.method ?? 'GET', url,
+      ...(init?.body === undefined ? {} : { body: JSON.parse(String(init.body)) }) })
+    if (url.endsWith('/api/v3/plugin-core/runs') && init?.method === 'POST') {
+      return new Response(JSON.stringify({ runId, phase: 'accepted' }), { status: 202 })
+    }
+    if (url.includes('/artifacts/')) {
+      return new Response(Uint8Array.from(Buffer.from('PKfake')), { status: 200 })
+    }
+    if (url.includes('/events')) {
+      const terminal = sseFrame('plugin_core.delivery', {
+        type: 'plugin_core.delivery', schemaVersion: 1, eventId: 2,
+        occurredAt: '2026-10-17T00:00:01.000Z', runId,
+        finalResponse: 'done', delivery: view('completed').delivery,
+        usage: view('completed').usage, durationMs: 100,
+      })
+      return new Response(`${sseFrame('plugin_core.ready', {
+        schemaVersion: 1, type: 'plugin_core.ready', generation: 'g',
+        run: view('running'), cursor: 1, terminal: false,
+      })}${readyOnly ? '' : terminal}`, { status: 200 })
+    }
+    getCount += 1
+    return new Response(JSON.stringify(view(readyOnly || getCount === 1 ? 'running' : 'completed')),
+      { status: 200 })
+  })
+  const artifacts = createMemoryArtifactStore()
+  let nextId = 0
+  const db = createMemoryDatabase()
+  const runtime = new ClientRuntime({
+    baseUrl: '',
+    fetch: fetchMock as unknown as typeof globalThis.fetch,
+    db,
+    artifacts,
+    applet,
+    subtle: crypto.subtle,
+    random: crypto,
+    now: () => '2026-10-17T00:00:00.000Z',
+    newId: () => `id-${++nextId}`,
+    reload: () => undefined,
+    createChannel: () => ({
+      postMessage: () => undefined,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      close: () => undefined,
+    }),
+    locks: { request: async (_name, _options, callback) => callback({}) },
+  } satisfies ClientRuntimeOptions)
+  return { runtime, requests, applet, db, fetchMock }
+}
+
+describe('plugin-core PWA integration', () => {
+  it('shows the last failed check from SSE and preserves its structured evidence in the run view', async () => {
+    const { runtime, fetchMock } = harness(true)
+    const details = { kind: 'verification_failed' as const, lastBuildId: '11111111-1111-4111-8111-111111111111',
+      error: { code: 'verification_failed', message: 'Required checks did not pass' },
+      failedChecks: [{ requirementId: 'shape', checkId: 'shape:2', method: 'perpendicular', status: 'unverified' }],
+      reasons: ['shape/shape:2: Expected a line: side (segment)'] }
+    const failure = { code: 'plugin_core_no_delivery', message: 'The last build did not satisfy verification.', details }
+    const notices: string[] = []
+    let gets = 0
+    fetchMock.mockImplementation(async (input, init) => {
+      if (init?.method === 'POST') return new Response(JSON.stringify({ runId, phase: 'accepted' }), { status: 202 })
+      if (String(input).includes('/events')) return new Response(sseFrame('plugin_core.ready', {
+        schemaVersion: 1, type: 'plugin_core.ready', generation: 'g', run: view('running'), cursor: 1, terminal: false,
+      }) + sseFrame('plugin_core.failed', { schemaVersion: 1, eventId: 2, runId,
+        occurredAt: '2026-10-17T00:00:01.000Z', type: 'plugin_core.failed', ...failure, usage: null }))
+      return new Response(JSON.stringify(gets++ === 0 ? view('running')
+        : { ...view('completed'), phase: 'failed', failure, delivery: null }))
+    })
+    const dispose = runtime.onNotice(notice => notices.push(notice.detail))
+    try {
+      await runtime.setProviderKey('fake')
+      const sessionId = await runtime.createSession()
+      await runtime.sendMessage(sessionId, 'draw')
+      await vi.waitFor(() => expect(notices.some(notice => notice.includes('Expected a line'))).toBe(true))
+      expect(notices.at(-1)).toContain(details.lastBuildId)
+      expect(notices.at(-1)?.match(/plugin_core_no_delivery/g)).toHaveLength(1)
+      expect((await runtime.view(sessionId)).runs[0]?.failure?.details).toEqual(details)
+    } finally { dispose(); runtime.dispose() }
+  })
+
+  it('does not silently drop an image or fall back to text when creation fails', async () => {
+    const { runtime, requests, fetchMock } = harness(true)
+    try {
+      await runtime.setProviderKey('fake')
+      const sessionId = await runtime.createSession()
+      const image = { mediaType: 'image/png' as const, dataBase64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=' }
+      fetchMock.mockImplementationOnce(async () => { throw new Error('offline') })
+      await expect(runtime.sendMessage(sessionId, 'from image', image)).rejects.toThrow()
+      expect(requests).toHaveLength(0)
+      expect(image.dataBase64).toContain('iVBOR')
+      expect((await runtime.view(sessionId)).messages[0]?.deliveryState).toBe('failed')
+      await runtime.sendMessage(sessionId, 'from image', image)
+      expect(requests.filter(r => r.method === 'POST')[0]?.body).toMatchObject({ image })
+    } finally { runtime.dispose() }
+  })
+
+  it('transmits an image only for its explicit turn and never persists its bytes', async () => {
+    const { runtime, requests, db } = harness(true)
+    try {
+      await runtime.setProviderKey('fake-provider-key')
+      const first = await runtime.createSession()
+      const second = await runtime.createSession()
+      const image = { mediaType: 'image/png' as const, dataBase64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=' }
+      await runtime.sendMessage(first, 'from this image', image)
+      await runtime.sendMessage(second, 'text only')
+      const bodies = requests.filter(r => r.method === 'POST').map(r => r.body)
+      expect(bodies[0]).toMatchObject({ image })
+      expect(bodies[1]).not.toHaveProperty('image')
+      expect(JSON.stringify(await db.getAll('messages'))).not.toContain(image.dataBase64)
+      const count = requests.length
+      await expect(runtime.sendMessage(second, 'invalid', { ...image, dataBase64: 'bad' })).rejects.toThrow()
+      expect(requests).toHaveLength(count)
+    } finally { runtime.dispose() }
+  })
+
+  it('persists the ready snapshot high-water mark without another create request', async () => {
+    const { runtime, requests, db } = harness(true)
+    await runtime.setProviderKey('provider-key')
+    const sessionId = await runtime.createSession()
+    await runtime.sendMessage(sessionId, 'draw a point')
+    await vi.waitFor(async () => {
+      const bindings = await db.getAll<{ eventCursor: number }>('run_bindings')
+      expect(bindings[0]?.eventCursor).toBe(1)
+    })
+    expect(requests.filter(request => request.method === 'POST')).toHaveLength(1)
+    expect((await runtime.view(sessionId)).delivery).toBeNull()
+    runtime.dispose()
+  })
+
+  it('keeps selected views through real runtime delivery, import and session switching', async () => {
+    let perspective = 'file-layout'
+    const api = {
+      evalCommand: () => true,
+      setPerspective: (value: string) => { perspective = value },
+      showAlgebraInput: () => undefined,
+      getAllObjectNames: () => ['A'], getObjectType: () => 'point',
+      getXML: () => `<geogebra><gui><layout>${perspective}</layout></gui><construction><element type="point" label="A"/></construction></geogebra>`,
+      getBase64: (callback: (value: string) => void) => callback(Buffer.from('PKsnapshot').toString('base64')),
+      setBase64: (_value: string, callback: () => void) => { perspective = 'file-layout'; callback() },
+      newConstruction: () => { perspective = 'reset-layout' },
+    }
+    vi.stubGlobal('GGBApplet', class {
+      constructor(private readonly options: { appletOnLoad(api: unknown): void }) {}
+      inject() { this.options.appletOnLoad(api) }
+      setHTML5Codebase() {}
+    })
+    vi.stubGlobal('localStorage', { getItem: () => null })
+    const port = createDirectAppletPort({ container: {
+      getBoundingClientRect: () => ({ width: 800, height: 600 }),
+    } as HTMLElement })
+    const { runtime } = harness(false, port)
+    try {
+      await runtime.setProviderKey('fake-provider-key')
+      const first = await runtime.createSession()
+      await runtime.openSession(first)
+      expect(perspective).toBe('G')
+      await runtime.setCanvasViews({ algebra: false, cas: true })
+      await runtime.sendMessage(first, 'mock construction')
+      await vi.waitFor(async () => expect((await runtime.view(first)).delivery).not.toBeNull())
+      expect(perspective).toBe('GC')
+      await runtime.importGgb(first, new TextEncoder().encode('PKimport'))
+      expect(perspective).toBe('GC')
+      const second = await runtime.createSession()
+      await runtime.openSession(second)
+      expect(perspective).toBe('GC')
+      await runtime.openSession(first)
+      expect(perspective).toBe('GC')
+    } finally { runtime.dispose(); vi.unstubAllGlobals() }
+  })
+
+  it('routes browser view changes without starting a Provider run', async () => {
+    const { runtime, requests, applet } = harness()
+    await runtime.setCanvasViews({ algebra: false, cas: true })
+    expect(applet.setViews).toHaveBeenCalledExactlyOnceWith({ algebra: false, cas: true })
+    expect(requests).toEqual([])
+    runtime.dispose()
+  })
+
+  it('creates a run, restores the delivered GGB and chains the next base', async () => {
+    const { runtime, requests } = harness()
+    await runtime.setProviderKey('provider-key')
+    const sessionId = await runtime.createSession()
+    await runtime.sendMessage(sessionId, 'draw a circle')
+    await vi.waitFor(async () => {
+      expect((await runtime.view(sessionId)).delivery).not.toBeNull()
+    })
+    const session = await runtime.view(sessionId)
+    expect(session.messages.some(message => message.role === 'final_report')).toBe(true)
+    expect(session.delivery?.sha256).toBe('c'.repeat(64))
+    const download = await runtime.downloadDelivery(sessionId)
+    expect(Buffer.from(download!.base64, 'base64').toString()).toBe('PKfake')
+    expect(requests[0]).toMatchObject({
+      method: 'POST', url: '/api/v3/plugin-core/runs',
+      body: { runId: expect.stringMatching(/^run_/), prompt: 'draw a circle', base: null },
+    })
+    const status = await runtime.view(sessionId)
+    expect(status.runs.at(-1)?.phase).toBe('completed')
+
+    await runtime.sendMessage(sessionId, 'change the color')
+    const creates = requests.filter(request => request.method === 'POST')
+    expect(creates).toHaveLength(2)
+    expect(creates[1]?.body).toMatchObject({
+      prompt: 'change the color',
+      base: {
+        dataBase64: Buffer.from('reserialized').toString('base64'),
+        name: expect.stringContaining('session-'),
+      },
+    })
+    runtime.dispose()
+  })
+})

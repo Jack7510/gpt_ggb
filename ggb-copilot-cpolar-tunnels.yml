@@ -1,0 +1,13 @@
+# Merge this tunnels section into /usr/local/etc/cpolar/cpolar.yml on the cloud host.
+# Keep the authtoken only in the cloud-host configuration; never add it here.
+tunnels:
+  ggb-copilot:
+    proto: http
+    addr: "80"
+    subdomain: ggb-copilot
+    region: cn
+  ggb-app:
+    proto: http
+    addr: "80"
+    subdomain: ggb-app
+    region: cn

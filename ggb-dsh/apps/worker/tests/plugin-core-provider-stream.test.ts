@@ -1,0 +1,106 @@
+import { describe, expect, it } from 'vitest'
+import { ProviderToolStream, ProviderStreamEvidence } from '../src/plugin-core/provider-stream-evidence.js'
+import { apply } from '../src/plugin-core/provider-stream-plugin.js'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+function events(argumentsText: string) {
+  return [{ type: 'message_start', message: { usage: {} } },
+    { type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'call', name: 'ggb_build', input: {} } },
+    ...[argumentsText.slice(0, 12), argumentsText.slice(12)].map(partial_json => ({
+      type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json } })),
+    { type: 'content_block_stop', index: 0 },
+    { type: 'message_delta', delta: { stop_reason: 'tool_use' } }, { type: 'message_stop' }]
+}
+function tool(capture: ProviderToolStream) { return (capture.snapshot().tools as Record<string, unknown>[])[0]! }
+
+describe('wire versus public SDK tool stream evidence', () => {
+  it.each(['\n', '\r\n'])('preserves Unicode and fragmented SSE with %j separators', separator => {
+    const args = JSON.stringify({ request: { prompt: '画圆', plan: {} } })
+    const text = events(args).map(event => `event: ${event.type}${separator}data: ${JSON.stringify(event)}${separator}${separator}`).join('')
+    const bytes = Buffer.from(text)
+    const capture = new ProviderToolStream(1, [])
+    for (let i = 0; i < bytes.length; i += 7) capture.bytes(bytes.subarray(i, i + 7))
+    capture.sdk({ type: 'block-end', block: { type: 'tool-call', id: 'call', arguments: args } })
+    expect(tool(capture)).toMatchObject({ complete: true, wireJsonValid: true, sdkJsonValid: true, assembly: 'identical' })
+  })
+  it('distinguishes malformed provider JSON from a changed SDK assembly', () => {
+    const bad = new ProviderToolStream(1, [])
+    for (const event of events('{"request":')) bad.wire(event)
+    bad.sdk({ type: 'block-end', block: { type: 'tool-call', id: 'call', arguments: '{"request":' } })
+    expect(tool(bad)).toMatchObject({ wireJsonValid: false, sdkJsonValid: false, assembly: 'identical' })
+    const changed = new ProviderToolStream(2, [])
+    for (const event of events('{"request":{}}')) changed.wire(event)
+    changed.sdk({ type: 'block-end', block: { type: 'tool-call', id: 'call', arguments: '{' } })
+    expect(tool(changed)).toMatchObject({ wireJsonValid: true, sdkJsonValid: false, assembly: 'different' })
+  })
+  it('redacts split secrets after assembly and retains no free text or reasoning', () => {
+    const capture = new ProviderToolStream(1, ['fake-key', 'split-secret'])
+    capture.wire({ type: 'content_block_start', index: 9, content_block: { type: 'thinking', thinking: 'private reasoning' } })
+    const args = '{"token":"split-secret","prompt":"fake-key"}'
+    for (const event of events(args)) capture.wire(event)
+    capture.sdk({ type: 'block-end', block: { type: 'tool-call', id: 'call', arguments: args } })
+    const text = JSON.stringify(capture.snapshot())
+    expect(text).not.toContain('split-secret')
+    expect(text).not.toContain('fake-key')
+    expect(text).not.toContain('private reasoning')
+    expect(tool(capture).wirePreview).toContain('[redacted]')
+  })
+  it('redacts an unknown credential even when its JSON string is unterminated', () => {
+    const capture = new ProviderToolStream(1, [])
+    for (const event of events('{"providerKey":"unknown-value')) capture.wire(event)
+    expect(JSON.stringify(capture.snapshot())).not.toContain('unknown-value')
+  })
+  it('marks oversized or incomplete input as unavailable, never as an SDK mismatch', () => {
+    const capture = new ProviderToolStream(1, [])
+    for (const event of events('x'.repeat(40 * 1024))) capture.wire(event)
+    expect(tool(capture)).toMatchObject({ truncated: true, complete: false, assembly: 'unavailable' })
+  })
+  it('compares full JSON even when small token deltas exceed the fragment metadata limit', () => {
+    const capture = new ProviderToolStream(1, [])
+    const args = JSON.stringify({ request: { prompt: '画'.repeat(500) } })
+    const wire = events(args)
+    capture.wire(wire[1]!)
+    for (const partial_json of args) capture.wire({ type: 'content_block_delta', index: 0,
+      delta: { type: 'input_json_delta', partial_json } })
+    for (const event of wire.slice(-3)) capture.wire(event)
+    capture.sdk({ type: 'block-end', block: { type: 'tool-call', id: 'call', arguments: args } })
+    expect(tool(capture)).toMatchObject({ complete: true, truncated: false,
+      fragmentMetadataLimited: true, assembly: 'identical' })
+    expect(tool(capture).fragments).toHaveLength(256)
+  })
+  it('keeps all stream chunks after 16 requests and tolerates diagnostic write failure', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'stream-budget-'))
+    const key = Symbol.for('ggb.providerStreamEvidence')
+    const global = globalThis as unknown as Record<symbol, unknown>
+    const previous = global[key]
+    type Chunk = Record<string, unknown>
+    let hook!: (options: unknown, next: () => AsyncIterable<Chunk>) => AsyncIterable<Chunk>
+    try {
+      const path = join(root, 'stream.json')
+      const evidence = new ProviderStreamEvidence(path, [])
+      global[key] = evidence
+      apply({ on(_name, handler) { hook = handler } })
+      for (let i = 0; i < 20; i++) {
+        const chunks = []
+        for await (const chunk of hook({}, async function* () { yield { index: i }; yield { done: true } })) chunks.push(chunk)
+        expect(chunks).toEqual([{ index: i }, { done: true }])
+      }
+      expect(JSON.parse(await readFile(path, 'utf8'))).toMatchObject({ droppedRequests: 4 })
+      expect(JSON.parse(await readFile(path, 'utf8')).requests).toHaveLength(16)
+      const blocker = join(root, 'file')
+      await writeFile(blocker, 'not a directory')
+      global[key] = new ProviderStreamEvidence(join(blocker, 'stream.json'), [])
+      const chunks = []
+      for await (const chunk of hook({}, async function* () { yield { ok: true } })) chunks.push(chunk)
+      expect(chunks).toEqual([{ ok: true }])
+      await expect(async () => {
+        for await (const _ of hook({}, async function* () { throw new Error('actual SDK error') })) { /* drain */ }
+      }).rejects.toThrow('actual SDK error')
+    } finally {
+      if (previous === undefined) delete global[key]; else global[key] = previous
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+})

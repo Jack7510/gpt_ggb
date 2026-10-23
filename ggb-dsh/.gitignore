@@ -1,0 +1,13 @@
+node_modules/
+lib/
+coverage/
+*.log
+.cache/
+.local/
+.plugin-core-runtime/
+.pnpm-store/
+dist/
+*.tsbuildinfo
+apps/client/public/geogebra/
+apps/client/public/geogebra-runtime-manifest.json
+output/playwright/

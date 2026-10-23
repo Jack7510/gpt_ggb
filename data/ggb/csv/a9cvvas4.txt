@@ -1,2 +1,0 @@
-SetActiveView["G"]
-SetBackgroundColor[255, 255, 255]

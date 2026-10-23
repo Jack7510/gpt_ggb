@@ -1,0 +1,18 @@
+{
+  "name": "GGB Agent",
+  "short_name": "GGB Agent",
+  "description": "Geometry agent client with a local session store and a browser GeoGebra canvas.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1f6feb",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

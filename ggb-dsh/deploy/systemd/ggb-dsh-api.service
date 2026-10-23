@@ -1,0 +1,27 @@
+[Unit]
+Description=GGB DSH V3 API
+Wants=network-online.target
+After=network-online.target ggb-dsh-worker.service
+Requires=ggb-dsh-worker.service
+
+[Service]
+Type=simple
+User=admin
+Group=admin
+WorkingDirectory=/home/admin/work/ggb-dsh/ggb_copilot/ggb-dsh
+EnvironmentFile=/etc/ggb-dsh/server.env
+RuntimeDirectory=ggb-dsh
+RuntimeDirectoryMode=0750
+UMask=0077
+ExecStart=/usr/bin/node apps/api/lib/main.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=45
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/run/ggb-dsh
+
+[Install]
+WantedBy=multi-user.target

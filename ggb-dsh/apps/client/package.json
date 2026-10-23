@@ -1,0 +1,31 @@
+{
+  "name": "@ggb-copilot/client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false",
+    "bundle": "vue-tsc --noEmit -p tsconfig.client.json && vite build",
+    "dev": "vite",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ggb-copilot/application": "workspace:*",
+    "@ggb-copilot/geometry-geogebra": "workspace:*",
+    "katex": "0.18.9",
+    "markdown-it": "14.3.2",
+    "markdown-it-texmath": "1.0.0",
+    "vue": "3.5.42",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@types/markdown-it": "14.1.2",
+    "@types/node": "26.4.0",
+    "@vitejs/plugin-vue": "6.0.8",
+    "typescript": "6.0.3",
+    "vite": "8.2.2",
+    "vitest": "4.1.11",
+    "vue-tsc": "3.3.11"
+  }
+}

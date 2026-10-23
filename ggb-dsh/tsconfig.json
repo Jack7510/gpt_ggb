@@ -1,0 +1,35 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "./packages/app-protocol"
+    },
+    {
+      "path": "./packages/geometry-contract"
+    },
+    {
+      "path": "./packages/geometry-geogebra"
+    },
+    {
+      "path": "./packages/geometry-validation"
+    },
+    {
+      "path": "./packages/knowledge"
+    },
+    {
+      "path": "./packages/application"
+    },
+    {
+      "path": "./packages/run-persistence"
+    },
+    {
+      "path": "./apps/client"
+    },
+    {
+      "path": "./apps/api"
+    },
+    {
+      "path": "./apps/worker"
+    }
+  ]
+}

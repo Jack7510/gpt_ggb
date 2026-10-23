@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-10-22",
+  "node": {
+    "supportedRange": "^22.19.0 || >=24.0.0",
+    "role": "API/Worker and DSH runtime",
+    "policy": "Do not pin an exact Node release; validate the range against the selected DSH SDK before release."
+  },
+  "pnpm": {
+    "version": "11.7.0",
+    "role": "development package manager"
+  },
+  "dsh": {
+    "packageVersion": "0.2.1-rc.2",
+    "role": "SDK, Session and Agent runtime",
+    "cordisVersion": "4.0.5"
+  },
+  "geogebra": {
+    "version": "5.4.929.3",
+    "role": "self-hosted Math Apps applet release candidate",
+    "source": "https://download.geogebra.org/installers/5.4/geogebra-math-apps-bundle-5-4-929-3.zip",
+    "sha256": "8855e7577fb766108e3feed1991c42649b691ef4a4d88c2ddb431b893d58811e"
+  },
+  "plugin": {
+    "pluginVersion": "0.8.3",
+    "archiveSha256": "c0bd9d50ae405683cc063c8373a6bcad91f67e80279ff7a9be81dc9b90f4faae",
+    "playwright": "1.64.1",
+    "geogebra": {
+      "version": "5.4.932.1",
+      "sha256": "c139f3edb51c004ec67d83226a1f1215486f8559ad98ee37e9e775aac278e96e",
+      "url": "https://download.geogebra.org/installers/5.4/geogebra-math-apps-bundle-5-4-932-1.zip"
+    },
+    "hostProtocolVersion": 2,
+    "receiptSchemaVersion": 2,
+    "channelProtocolVersion": 5,
+    "executorProtocolVersion": 3
+  }
+}

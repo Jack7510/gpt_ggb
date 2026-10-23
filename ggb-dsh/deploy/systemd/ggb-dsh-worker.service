@@ -1,0 +1,31 @@
+[Unit]
+Description=GGB DSH V3 Worker
+Wants=network-online.target
+After=network-online.target postgresql.service
+
+[Service]
+Type=simple
+User=admin
+Group=admin
+WorkingDirectory=/home/admin/work/ggb-dsh/ggb_copilot/ggb-dsh
+EnvironmentFile=/etc/ggb-dsh/server.env
+RuntimeDirectory=ggb-dsh
+RuntimeDirectoryMode=0750
+StateDirectory=ggb-dsh
+UMask=0077
+ExecStartPre=/bin/mkdir -p /run/ggb-dsh/home /run/ggb-dsh/cache /run/ggb-dsh/tmp /run/ggb-dsh/plugin-core-runs
+ExecStart=/usr/bin/node apps/worker/lib/main.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=150
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/run/ggb-dsh /var/lib/ggb-dsh
+MemoryMax=2G
+TasksMax=512
+LimitNOFILE=8192
+
+[Install]
+WantedBy=multi-user.target

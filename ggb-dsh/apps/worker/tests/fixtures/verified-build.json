@@ -1,0 +1,277 @@
+{
+  "request": {
+    "protocolVersion": 2,
+    "prompt": "Create point P",
+    "locale": "en",
+    "plan": {
+      "program": [
+        {
+          "op": "freePoint",
+          "id": "P",
+          "x": 0,
+          "y": 0
+        }
+      ],
+      "requirements": [
+        {
+          "id": "present",
+          "source": "point P",
+          "checks": [
+            {
+              "kind": "exists",
+              "subjects": [
+                "P"
+              ],
+              "scope": "initial"
+            }
+          ]
+        }
+      ],
+      "interactions": []
+    }
+  },
+  "objects": [
+    {
+      "name": "P",
+      "type": "point",
+      "nativeType": "point",
+      "value": null,
+      "defined": true,
+      "independent": true,
+      "moveable": true,
+      "command": "(0,0)",
+      "nativeDefinition": null,
+      "referenceState": "direct",
+      "expression": null,
+      "inputs": [],
+      "valueString": "(0,0)",
+      "x": 0,
+      "y": 0,
+      "line": null,
+      "circle": null,
+      "conic": null,
+      "data": null,
+      "color": "#000000",
+      "visible": true,
+      "labelVisible": true,
+      "labelStyle": 0,
+      "lineThickness": 2,
+      "lineStyle": 0,
+      "filling": 0,
+      "caption": "",
+      "fixed": false,
+      "slider": null
+    }
+  ],
+  "phase": {
+    "status": "passed",
+    "objects": [
+      {
+        "name": "P",
+        "type": "point",
+        "nativeType": "point",
+        "value": null,
+        "defined": true,
+        "independent": true,
+        "moveable": true,
+        "command": "(0,0)",
+        "nativeDefinition": null,
+        "referenceState": "direct",
+        "expression": null,
+        "inputs": [],
+        "valueString": "(0,0)",
+        "x": 0,
+        "y": 0,
+        "line": null,
+        "circle": null,
+        "conic": null,
+        "data": null,
+        "color": "#000000",
+        "visible": true,
+        "labelVisible": true,
+        "labelStyle": 0,
+        "lineThickness": 2,
+        "lineStyle": 0,
+        "filling": 0,
+        "caption": "",
+        "fixed": false,
+        "slider": null
+      }
+    ],
+    "results": [
+      {
+        "requirementId": "$canvas",
+        "checkId": "$canvas:0",
+        "subjects": [
+          "P"
+        ],
+        "method": "objects_defined",
+        "scope": "initial",
+        "status": "passed",
+        "evidence": [
+          {
+            "name": "P",
+            "type": "point",
+            "nativeType": "point",
+            "value": null,
+            "defined": true,
+            "independent": true,
+            "moveable": true,
+            "command": "(0,0)",
+            "nativeDefinition": null,
+            "referenceState": "direct",
+            "expression": null,
+            "inputs": [],
+            "valueString": "(0,0)",
+            "x": 0,
+            "y": 0,
+            "line": null,
+            "circle": null,
+            "conic": null,
+            "data": null,
+            "color": "#000000",
+            "visible": true,
+            "labelVisible": true,
+            "labelStyle": 0,
+            "lineThickness": 2,
+            "lineStyle": 0,
+            "filling": 0,
+            "caption": "",
+            "fixed": false,
+            "slider": null
+          }
+        ]
+      },
+      {
+        "requirementId": "$program:P",
+        "checkId": "$program:P:0",
+        "subjects": [
+          "P"
+        ],
+        "method": "construction",
+        "scope": "initial",
+        "status": "passed",
+        "evidence": [
+          {
+            "name": "P",
+            "type": "point",
+            "nativeType": "point",
+            "value": null,
+            "defined": true,
+            "independent": true,
+            "moveable": true,
+            "command": "(0,0)",
+            "nativeDefinition": null,
+            "referenceState": "direct",
+            "expression": null,
+            "inputs": [],
+            "valueString": "(0,0)",
+            "x": 0,
+            "y": 0,
+            "line": null,
+            "circle": null,
+            "conic": null,
+            "data": null,
+            "color": "#000000",
+            "visible": true,
+            "labelVisible": true,
+            "labelStyle": 0,
+            "lineThickness": 2,
+            "lineStyle": 0,
+            "filling": 0,
+            "caption": "",
+            "fixed": false,
+            "slider": null
+          }
+        ]
+      },
+      {
+        "requirementId": "$style:P",
+        "checkId": "$style:P:0",
+        "subjects": [
+          "P"
+        ],
+        "method": "presentation",
+        "scope": "initial",
+        "status": "passed",
+        "evidence": [
+          {
+            "name": "P",
+            "type": "point",
+            "nativeType": "point",
+            "value": null,
+            "defined": true,
+            "independent": true,
+            "moveable": true,
+            "command": "(0,0)",
+            "nativeDefinition": null,
+            "referenceState": "direct",
+            "expression": null,
+            "inputs": [],
+            "valueString": "(0,0)",
+            "x": 0,
+            "y": 0,
+            "line": null,
+            "circle": null,
+            "conic": null,
+            "data": null,
+            "color": "#000000",
+            "visible": true,
+            "labelVisible": true,
+            "labelStyle": 0,
+            "lineThickness": 2,
+            "lineStyle": 0,
+            "filling": 0,
+            "caption": "",
+            "fixed": false,
+            "slider": null
+          }
+        ]
+      },
+      {
+        "requirementId": "present",
+        "checkId": "present:0",
+        "subjects": [
+          "P"
+        ],
+        "method": "exists",
+        "scope": "initial",
+        "status": "passed",
+        "evidence": [
+          {
+            "name": "P",
+            "type": "point",
+            "nativeType": "point",
+            "value": null,
+            "defined": true,
+            "independent": true,
+            "moveable": true,
+            "command": "(0,0)",
+            "nativeDefinition": null,
+            "referenceState": "direct",
+            "expression": null,
+            "inputs": [],
+            "valueString": "(0,0)",
+            "x": 0,
+            "y": 0,
+            "line": null,
+            "circle": null,
+            "conic": null,
+            "data": null,
+            "color": "#000000",
+            "visible": true,
+            "labelVisible": true,
+            "labelStyle": 0,
+            "lineThickness": 2,
+            "lineStyle": 0,
+            "filling": 0,
+            "caption": "",
+            "fixed": false,
+            "slider": null
+          }
+        ]
+      }
+    ],
+    "observations": []
+  }
+}

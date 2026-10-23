@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>GeoGebra</title>
+    <!--
+      Dedicated GeoGebra document (§12). Wide applet privileges stay here; the
+      main UI only talks to it through the validated postMessage port.
+    -->
+    <script src="/geogebra/deployggb.js"></script>
+  </head>
+  <body style="margin: 0">
+    <div id="applet" style="width: 100vw; height: 100vh"></div>
+    <script type="module" src="/src/geogebra/applet-document.ts"></script>
+  </body>
+</html>

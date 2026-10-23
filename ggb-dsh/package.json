@@ -1,0 +1,47 @@
+{
+  "name": "@ggb-copilot/dsh-root",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "scripts": {
+    "provision:geogebra": "node tools/provision-geogebra.mjs",
+    "rag:export": "node tools/export-rag-solved-tasks.mjs",
+    "rag:merge": "node tools/import-release-knowledge.mjs",
+    "verify:plugin-core": "node tools/plugin-core-batch.mjs",
+    "verify:plugin-core:integrated": "node tools/plugin-core-integrated-batch.mjs",
+    "verify:plugin-core-edit": "node tools/plugin-core-edit-batch.mjs",
+    "verify:plugin-core-ui": "node tools/plugin-core-ui-e2e.mjs",
+    "report:plugin-core:usage": "node tools/report-plugin-core-usage.mjs",
+    "provision:plugin-core": "node tools/provision-plugin-core.mjs",
+    "build": "node tools/agent-reading-hints.mjs && tsc -b && pnpm --filter @ggb-copilot/client run bundle",
+    "clean": "tsc -b --clean",
+    "typecheck": "node tools/agent-reading-hints.mjs && tsc -b --pretty false",
+    "test": "node --test tools/build-ggb-manual-index.test.mjs tools/workspace-boundaries.test.mjs && vitest run",
+    "quality": "node tools/quality-check.mjs && node tools/quality-shared.mjs",
+    "install:offline": "pnpm install --frozen-lockfile --offline --ignore-scripts",
+    "check:client": "pnpm exec tsc -b apps/client && pnpm --filter @ggb-copilot/client run bundle && pnpm exec vitest run apps/client",
+    "check:api": "pnpm exec tsc -b apps/api && pnpm exec vitest run apps/api",
+    "check:worker": "pnpm exec tsc -b apps/worker && pnpm exec vitest run apps/worker",
+    "check:fast": "pnpm run typecheck && pnpm run test",
+    "check": "pnpm run build && pnpm run lint:shared && pnpm run test && pnpm run quality",
+    "dev": "pnpm exec tsc -b apps/client && pnpm --filter @ggb-copilot/client run dev",
+    "lint:shared": "eslint packages tools eslint.config.js",
+    "manual:index": "node tools/build-ggb-manual-index.mjs",
+    "check:package": "node tools/check-package.mjs",
+    "verify:plugin-core:runtime": "GGB_PLUGIN_REAL_RUNTIME=1 vitest run apps/worker/tests/plugin-core-real-runtime.test.ts",
+    "verify:plugin-core:pwa:mock": "node tools/plugin-core-pwa-mock.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.64.1",
+    "@types/node": "26.4.0",
+    "typescript": "6.0.3",
+    "vitest": "4.1.11",
+    "@eslint/js": "10.0.1",
+    "eslint": "10.9.1",
+    "typescript-eslint": "8.68.0"
+  }
+}

@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [ggb_gpt, main]
+
+permissions:
+  contents: read
+
+jobs:
+  ggb-dsh-offline:
+    runs-on: macos-14
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: ggb-dsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.20.0"
+          cache: pnpm
+          cache-dependency-path: ggb-dsh/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: Build and run offline checks including the pinned plugin and receipts
+        run: pnpm run check
+        env:
+          GGB_PLUGIN_REAL_RUNTIME: "0"

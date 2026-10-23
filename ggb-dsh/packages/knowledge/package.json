@@ -1,0 +1,32 @@
+{
+  "name": "@ggb-copilot/knowledge",
+  "version": "0.4.73",
+  "private": true,
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --pretty false"
+  },
+  "dependencies": {
+    "@ggb-copilot/app-protocol": "workspace:*",
+    "@ggb-copilot/geometry-contract": "workspace:*"
+  },
+  "peerDependencies": {
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "zod": "4.5.4"
+  }
+}

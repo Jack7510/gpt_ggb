@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib",
+    "tsBuildInfoFile": "../../.cache/app-protocol.tsbuildinfo"
+  },
+  "references": [
+    {
+      "path": "../geometry-contract"
+    }
+  ],
+  "include": [
+    "src/**/*.ts"
+  ]
+}
