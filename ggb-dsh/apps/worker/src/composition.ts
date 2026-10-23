@@ -83,14 +83,14 @@ export async function composeWorker(env: NodeJS.ProcessEnv = process.env, depend
       maxMessageBytes: MAX_CHANNEL_MESSAGE_BYTES,
     },
     {
-      pluginCore: async (request) => await service.run({
+      pluginCore: async (request, onProgress) => await service.run({
         runId: request.runId,
         deliveryContract: request.deliveryContract,
         providerKey: request.credential.providerKey ?? '',
         prompt: request.prompt,
         ...(request.image === undefined ? {} : { image: request.image }),
         base: request.base ?? null,
-      }),
+      }, onProgress),
       cancelPluginCore: async (request) => service.cancel(request.runId) === 'cancelled'
         ? 'cancelled' : 'not_found',
     },

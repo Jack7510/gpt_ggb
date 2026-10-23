@@ -51,3 +51,26 @@ describe('PostgreSQL unknown-cleanup boundary without a database', () => {
     for (const [sql] of deletes) expect(sql).toContain("NOT IN ('plugin_core_cleanup_failed', 'plugin_core_worker_unavailable')")
   })
 })
+
+
+describe('PostgreSQL progress row lock without a database', () => {
+  it.each([
+    ['running', false, 0, 1], ['running', false, 2, 0], ['running', true, 0, 0],
+    ['completed', false, 0, 0], ['failed', false, 0, 0], ['cancelled', true, 0, 0],
+  ] as const)('guards phase=%s stop=%s previous=%s', async (phase, stop, sequence, count) => {
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes('FOR UPDATE')) return { rows: [{ phase, stop_requested: stop }], rowCount: 1 }
+      if (sql.includes('AS sequence')) return { rows: [{ sequence }], rowCount: 1 }
+      if (sql.includes('AS next_id')) return { rows: [{ next_id: '3' }], rowCount: 1 }
+      return { rows: [], rowCount: 0 }
+    })
+    const client = { query, release: vi.fn() } as unknown as PoolClient
+    const store = new PgPluginCoreStore({ connect: async () => client } as unknown as Pool)
+    const occurredAt = '2026-10-23T00:00:00.000Z'
+    expect(await store.appendEvents(runId, [{ occurredAt, payload: { type: 'plugin_core.progress', progress: {
+      tool: 'ggb_check', status: 'started', callId: '11111111-1111-4111-8111-111111111111', sequence: 1, occurredAt,
+    } } }])).toHaveLength(count)
+    expect(query.mock.calls[1]?.[0]).toContain('FOR UPDATE')
+    expect(query.mock.calls.filter(([sql]) => sql.includes('INSERT INTO plugin_core_events'))).toHaveLength(count)
+  })
+})

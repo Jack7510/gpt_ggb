@@ -8,6 +8,7 @@ import { CLIENT_SCHEMA_VERSION, CLIENT_STORES, upgradeClientSchema, type ClientS
 export interface ClientDatabase {
   readonly schemaVersion: number
   put(store: ClientStoreName, value: unknown): Promise<void>
+  update<T>(store: ClientStoreName, key: string, change: (current: T | null) => T | null): Promise<T | null>
   get<T>(store: ClientStoreName, key: string): Promise<T | null>
   getAll<T>(store: ClientStoreName): Promise<T[]>
   getAllByIndex<T>(store: ClientStoreName, index: string, key: string): Promise<T[]>
@@ -45,6 +46,25 @@ class IndexedDbClientDatabase implements ClientDatabase {
 
   public put(store: ClientStoreName, value: unknown): Promise<void> {
     return this.transact(store, 'readwrite', (objectStore) => objectStore.put(value))
+  }
+
+  public update<T>(store: ClientStoreName, key: string,
+    change: (current: T | null) => T | null): Promise<T | null> {
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction(store, 'readwrite')
+      const objectStore = transaction.objectStore(store)
+      const request = objectStore.get(key)
+      let next: T | null = null
+      request.onsuccess = () => {
+        try {
+          next = change((request.result as T | undefined) ?? null)
+          if (next !== null) objectStore.put(next)
+        } catch (error) { transaction.abort(); reject(error) }
+      }
+      transaction.oncomplete = () => resolve(next)
+      transaction.onabort = () => reject(transaction.error ?? new Error('indexeddb_transaction_aborted'))
+      transaction.onerror = () => reject(transaction.error ?? new Error('indexeddb_transaction_failed'))
+    })
   }
 
   public async get<T>(store: ClientStoreName, key: string): Promise<T | null> {
@@ -125,6 +145,13 @@ export function createMemoryDatabase(): ClientDatabase {
         throw new Error(`client store ${store} requires a string ${keyPath}`)
       }
       bucket(store).set(key, structuredClone(value))
+    },
+    update: async <T>(store: ClientStoreName, key: string,
+      change: (current: T | null) => T | null): Promise<T | null> => {
+      const current = bucket(store).get(key)
+      const next = change(current === undefined ? null : structuredClone(current) as T)
+      if (next !== null) bucket(store).set(key, structuredClone(next))
+      return next
     },
     get: async <T>(store: ClientStoreName, key: string): Promise<T | null> => {
       const value = bucket(store).get(key)

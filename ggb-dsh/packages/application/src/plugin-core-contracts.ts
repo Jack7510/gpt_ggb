@@ -1,6 +1,8 @@
+import { pluginCoreConstructionRecordSchema, constructionMatchesBuild } from './plugin-core-construction.js'
 import { pluginCoreBuildFailureSchema } from './plugin-core-build-failure.js'
 import { pluginCoreTrustedBuildSchema, pluginCoreCleanupSchema } from './plugin-core-trust.js'
 import { z } from 'zod'
+import { pluginCoreProgressSchema, type PluginCoreProgress } from './plugin-core-progress.js'
 import { runIdSchema } from './ids.js'
 
 /** The selected construction engine; persisted per run and advertised by bootstrap. */
@@ -75,8 +77,9 @@ export const pluginCoreDeliverySchema = z.object({
   artifacts: z.array(pluginCoreArtifactSchema).min(1).max(8),
   verification: z.json(),
   trustedBuild: pluginCoreTrustedBuildSchema.optional(),
+  construction: pluginCoreConstructionRecordSchema.optional(),
   cleanup: pluginCoreCleanupSchema.optional(),
-}).strict()
+}).strict().refine(value => constructionMatchesBuild(value.construction, value.trustedBuild), 'construction_binding')
 export type PluginCoreDelivery = z.infer<typeof pluginCoreDeliverySchema>
 
 /** Persisted run row. Prompt/base bytes are not duplicated in the ledger. */
@@ -123,6 +126,7 @@ export interface PluginCoreRunAccessFacts {
 }
 
 export interface PluginCoreRunView {
+  progress?: PluginCoreProgress | null
   runId: string
   engine: 'plugin_core'
   phase: PluginCorePhase
@@ -146,6 +150,7 @@ export interface PluginCoreArtifactRecord extends PluginCoreArtifact {
 
 /** Persisted event envelope; the payload stays plugin-namespaced. */
 export const pluginCoreEventPayloadSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('plugin_core.progress'), progress: pluginCoreProgressSchema }).strict(),
   z.object({
     type: z.literal('plugin_core.phase'),
     phase: pluginCorePhaseSchema,

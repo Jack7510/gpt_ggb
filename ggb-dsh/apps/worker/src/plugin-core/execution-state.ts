@@ -1,9 +1,27 @@
+import { pluginCoreProgressFactSchema, PLUGIN_CORE_PROGRESS_LIMIT, type PluginCoreProgressFact, type PluginCoreProgressObserver } from '@ggb-copilot/application'
 import { mkdir, open, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { ChannelPluginCoreDelivery, PluginCoreBuildFailure, RunId } from '@ggb-copilot/application'
 
 /** Shared candidate and quarantine ownership; never scans a delivery directory. */
 export class PluginCoreExecutionState {
+  private readonly progress = new Map<string, { count: number; observer: PluginCoreProgressObserver }>()
+  observeProgress(runId: RunId, observer: PluginCoreProgressObserver): () => void {
+    if (this.progress.has(runId)) return () => {}
+    const owner = { count: 0, observer }
+    this.progress.set(runId, owner)
+    return () => { if (this.progress.get(runId) === owner) this.progress.delete(runId) }
+  }
+  reportProgress(runId: RunId, fact: PluginCoreProgressFact): void {
+    const owner = this.progress.get(runId)
+    const parsed = pluginCoreProgressFactSchema.safeParse(fact)
+    if (!owner || owner.count >= PLUGIN_CORE_PROGRESS_LIMIT || !parsed.success) return
+    try {
+      void Promise.resolve(owner.observer({ ...parsed.data, sequence: ++owner.count,
+        occurredAt: new Date().toISOString() })).catch(() => {})
+    } catch { /* Progress observers cannot interrupt tool execution. */ }
+  }
+
   private readonly builds = new Map<string, { buildId: string; failure?: PluginCoreBuildFailure }>()
   startBuild(runId: RunId, buildId: string): void {
     this.builds.set(runId, { buildId, failure: { kind: 'execution_failed', lastBuildId: buildId,

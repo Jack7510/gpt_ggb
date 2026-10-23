@@ -6,6 +6,8 @@ export * from './ids.js'
 export * from './errors.js'
 export * from './presentation-locale.js'
 export * from './plugin-core-contracts.js'
+export * from './plugin-core-progress.js'
 
 export * from './plugin-core-image.js'
 export * from './plugin-core-build-failure.js'
+export * from './plugin-core-construction.js'

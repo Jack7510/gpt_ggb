@@ -1,7 +1,8 @@
 import { chmodSync, existsSync, unlinkSync } from 'node:fs'
 import { createServer, type Server, type Socket } from 'node:net'
 import {
-  PLUGIN_CORE_LIMITS,
+  INTERNAL_CHANNEL_PROTOCOL_VERSION, PLUGIN_CORE_LIMITS, PLUGIN_CORE_PROGRESS_LIMIT, pluginCoreProgressSchema,
+  type PluginCoreProgressObserver,
   channelHandshakeRequestSchema,
   channelPluginCoreCancelRequestSchema,
   channelPluginCoreRequestSchema,
@@ -23,7 +24,7 @@ export interface InternalChannelServerConfig {
 /** What the channel server forwards into the worker; auth is already verified. */
 export interface InternalChannelHandler {
   /** One independent plugin-core run. */
-  pluginCore?(request: ChannelPluginCoreRequest): Promise<Omit<ChannelPluginCoreResult, 'type' | 'requestId'>>
+  pluginCore?(request: ChannelPluginCoreRequest, onProgress: PluginCoreProgressObserver): Promise<Omit<ChannelPluginCoreResult, 'type' | 'requestId'>>
   /** Cancel one in-flight plugin-core run. */
   cancelPluginCore?(request: ChannelPluginCoreCancelRequest):
   Promise<'cancelled' | 'not_found' | 'already_terminal'>
@@ -121,6 +122,7 @@ export class InternalChannelServer {
       }
       this.write(socket, {
         type: 'handshake.accepted',
+        protocolVersion: INTERNAL_CHANNEL_PROTOCOL_VERSION,
         requestId,
         workerInstanceId: this.config.workerInstanceId,
       })
@@ -142,7 +144,15 @@ export class InternalChannelServer {
         return
       }
       try {
-        const result = await this.handler.pluginCore(parsed.data)
+        let accepting = true
+        let sequence = 0
+        const result = await this.handler.pluginCore(parsed.data, progress => {
+          const valid = pluginCoreProgressSchema.safeParse(progress)
+          if (!accepting || !valid.success || progress.sequence <= sequence
+            || sequence >= PLUGIN_CORE_PROGRESS_LIMIT || socket.writableLength > 64 * 1024) return
+          sequence = progress.sequence
+          this.write(socket, { type: 'plugin-core.progress', requestId, runId: parsed.data.runId, progress: valid.data })
+        }).finally(() => { accepting = false })
         const response = { type: 'plugin-core.result', requestId, ...result }
         if (Buffer.byteLength(JSON.stringify(response)) > PLUGIN_CORE_LIMITS.responseBytes) {
           this.write(socket, { ...response, delivery: null, finalResponse: '', diagnostics: null, modelCalls: [],

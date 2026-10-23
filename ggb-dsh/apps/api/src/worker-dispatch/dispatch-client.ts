@@ -4,7 +4,8 @@ import { StringDecoder } from 'node:string_decoder'
 import { connect, type Socket } from 'node:net'
 import {
   INTERNAL_CHANNEL_PROTOCOL_VERSION, PLUGIN_CORE_LIMITS,
-  channelPluginCoreResultSchema,
+  channelPluginCoreResultSchema, channelPluginCoreProgressSchema, channelHandshakeResponseSchema,
+  type PluginCoreProgressObserver,
   signChannelMessage,
   type ChannelPluginCoreResult,
   type ChannelResponse,
@@ -23,11 +24,12 @@ const MAX_CHANNEL_RESPONSE_BYTES = PLUGIN_CORE_LIMITS.responseBytes
 export interface PluginCoreWorkerChannel {
   runPluginCore(request: { deliveryContract?: 'legacy' | 'receipt-v1'; runId: RunId; providerKey: string; prompt: string;
     image?: PluginCoreImage; base?: { dataBase64: string; sha256: string; name: string | null } | null },
-  signal?: AbortSignal): Promise<ChannelPluginCoreResult>
+  signal?: AbortSignal, onProgress?: PluginCoreProgressObserver): Promise<ChannelPluginCoreResult>
 }
 
 interface Waiter {
   requestId: string
+  onProgress?: ((message: Record<string, unknown>) => void) | undefined
   timer: NodeJS.Timeout
   resolve: (message: Record<string, unknown>) => void
   reject: (error: Error) => void
@@ -56,18 +58,20 @@ export class WorkerDispatchClient implements PluginCoreWorkerChannel {
   /** One independent plugin-core run; the Worker returns the bounded delivery facts. */
   async runPluginCore(request: { deliveryContract?: 'legacy' | 'receipt-v1'; runId: RunId; providerKey: string; prompt: string;
     image?: PluginCoreImage; base?: { dataBase64: string; sha256: string; name: string | null } | null },
-  signal?: AbortSignal): Promise<ChannelPluginCoreResult> {
+  signal?: AbortSignal, onProgress?: PluginCoreProgressObserver): Promise<ChannelPluginCoreResult> {
     const isolated = new WorkerDispatchClient(this.socketPath, this.secret, this.ackTimeoutMs)
     this.runs.add(isolated)
-    try { return await isolated.runIsolated(request, signal) }
+    try { return await isolated.runIsolated(request, signal, onProgress) }
     finally { this.runs.delete(isolated); isolated.close() }
   }
 
   private async runIsolated(request: Parameters<PluginCoreWorkerChannel['runPluginCore']>[0],
-    signal?: AbortSignal): Promise<ChannelPluginCoreResult> {
+    signal?: AbortSignal, onProgress?: PluginCoreProgressObserver): Promise<ChannelPluginCoreResult> {
     const socket = await this.ensureHandshake()
     const now = Date.now()
     const requestId = randomUUID()
+    let progressTail = Promise.resolve()
+    let sequence = 0
     const response = this.request(socket, signChannelMessage(this.secret, {
       type: 'plugin-core.run' as const,
       deliveryContract: request.deliveryContract ?? 'receipt-v1',
@@ -80,7 +84,12 @@ export class WorkerDispatchClient implements PluginCoreWorkerChannel {
       prompt: request.prompt,
       ...(request.image === undefined ? {} : { image: request.image }),
       base: request.base ?? null,
-    }), PLUGIN_CORE_RESPONSE_TIMEOUT_MS)
+    }), PLUGIN_CORE_RESPONSE_TIMEOUT_MS, message => {
+      const parsed = channelPluginCoreProgressSchema.safeParse(message)
+      if (!parsed.success || parsed.data.runId !== request.runId || parsed.data.progress.sequence <= sequence) return
+      sequence = parsed.data.progress.sequence
+      progressTail = progressTail.then(async () => { await onProgress?.(parsed.data.progress) }).catch(() => {})
+    })
     const cancel = (): void => {
       // Keep awaiting the final result: cancel ack proves receipt, not cleanup.
       void this.sendCancel(socket, request.runId)
@@ -88,7 +97,9 @@ export class WorkerDispatchClient implements PluginCoreWorkerChannel {
     if (signal?.aborted === true) cancel()
     else signal?.addEventListener('abort', cancel, { once: true })
     try {
-      return channelPluginCoreResultSchema.parse(await response)
+      const result = channelPluginCoreResultSchema.parse(await response)
+      await progressTail
+      return result
     } finally {
       signal?.removeEventListener('abort', cancel)
     }
@@ -148,7 +159,7 @@ export class WorkerDispatchClient implements PluginCoreWorkerChannel {
           nonce: randomBytes(24).toString('hex'),
         }),
       )
-      if (response.type !== 'handshake.accepted') {
+      if (!channelHandshakeResponseSchema.safeParse(response).success) {
         socket.destroy()
         throw new Error(`worker handshake rejected: ${JSON.stringify(response)}`)
       }
@@ -214,20 +225,21 @@ export class WorkerDispatchClient implements PluginCoreWorkerChannel {
     if (requestId === null) return
     const waiter = this.waiters.get(requestId)
     if (waiter === undefined) return
+    if (message.type === 'plugin-core.progress') { waiter.onProgress?.(message); return }
     this.waiters.delete(requestId)
     clearTimeout(waiter.timer)
     waiter.resolve(message)
   }
 
   private async request(socket: Socket, message: object,
-    timeoutMs = this.ackTimeoutMs): Promise<ChannelResponse> {
+    timeoutMs = this.ackTimeoutMs, onProgress?: (message: Record<string, unknown>) => void): Promise<ChannelResponse> {
     const requestId = (message as { requestId: string }).requestId
     const response = await new Promise<Record<string, unknown>>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.waiters.delete(requestId)
         reject(new Error('worker ack timeout'))
       }, timeoutMs)
-      this.waiters.set(requestId, { requestId, timer, resolve, reject })
+      this.waiters.set(requestId, { requestId, timer, resolve, reject, onProgress })
       socket.write(`${JSON.stringify(message)}\n`)
     })
     return response as ChannelResponse

@@ -1,8 +1,10 @@
+import { pluginCoreConstructionRecordSchema, constructionMatchesBuild } from './plugin-core-construction.js'
 import { pluginCoreBuildFailureSchema } from './plugin-core-build-failure.js'
 import { pluginCoreImageSchema } from './plugin-core-image.js'
 import { pluginCoreCleanupSchema, pluginCoreTrustedBuildSchema } from './plugin-core-trust.js'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { z } from 'zod'
+import { pluginCoreProgressSchema } from './plugin-core-progress.js'
 import { runIdSchema } from './ids.js'
 
 /**
@@ -10,7 +12,7 @@ import { runIdSchema } from './ids.js'
  * Unix socket as NDJSON; every request carries an HMAC-SHA-256 `authentication`
  * field computed over the canonical JSON of the message without that field.
  */
-export const INTERNAL_CHANNEL_PROTOCOL_VERSION = 5 as const
+export const INTERNAL_CHANNEL_PROTOCOL_VERSION = 6 as const
 
 // Raw artifact limits and NDJSON byte budgets share one host contract.
 export const PLUGIN_CORE_LIMITS = Object.freeze({ ggbBytes: 6 * 1024 * 1024,
@@ -34,6 +36,7 @@ export const channelHandshakeRequestSchema = z
 export const channelHandshakeResponseSchema = z
   .object({
     type: z.literal('handshake.accepted'),
+    protocolVersion: z.literal(INTERNAL_CHANNEL_PROTOCOL_VERSION),
     requestId: z.uuid({ version: 'v4' }),
     workerInstanceId: z.string().min(1).max(128),
   })
@@ -107,10 +110,12 @@ export const channelPluginCoreDeliverySchema = z
     screenshotBase64: z.string().max(base64Limit(PLUGIN_CORE_LIMITS.previewBytes)).nullable(),
     verification: z.json(),
     trustedBuild: pluginCoreTrustedBuildSchema.optional(),
+    construction: pluginCoreConstructionRecordSchema.optional(),
     reportBase64: z.string().max(base64Limit(PLUGIN_CORE_LIMITS.reportBytes)).optional(),
     manifestBase64: z.string().max(base64Limit(PLUGIN_CORE_LIMITS.manifestBytes)).optional(),
   })
-  .strict().refine(value => Buffer.byteLength(JSON.stringify(value), 'utf8') <=
+  .strict().refine(value => constructionMatchesBuild(value.construction, value.trustedBuild), 'construction_binding')
+  .refine(value => Buffer.byteLength(JSON.stringify(value), 'utf8') <=
     PLUGIN_CORE_LIMITS.deliveryBytes, 'delivery_size')
   .refine(value => ([['ggbBase64', 'ggbBytes'], ['screenshotBase64', 'previewBytes'],
     ['reportBase64', 'reportBytes'], ['manifestBase64', 'manifestBytes']] as const).every(([field, limit]) => {
@@ -194,8 +199,16 @@ export const channelRequestSchema = z.discriminatedUnion('type', [
   channelPluginCoreCancelRequestSchema,
 ])
 
+export const channelPluginCoreProgressSchema = z.object({
+  type: z.literal('plugin-core.progress'),
+  requestId: z.uuid(),
+  runId: runIdSchema,
+  progress: pluginCoreProgressSchema,
+}).strict()
+
 export const channelResponseSchema = z.discriminatedUnion('type', [
   channelHandshakeResponseSchema,
+  channelPluginCoreProgressSchema,
   channelErrorResponseSchema,
   channelPluginCoreResultSchema,
   channelPluginCoreCancelAckSchema,

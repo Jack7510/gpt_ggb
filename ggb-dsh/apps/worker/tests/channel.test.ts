@@ -124,9 +124,9 @@ describe('internal channel server', () => {
     expect(response.workerInstanceId).toBe(WORKER_INSTANCE)
   })
 
-  it('rejects v1 handshakes and legacy dispatch payloads before the handler', async () => {
+  it.each([1, 5])('rejects v%s handshakes and legacy dispatch payloads before the handler', async version => {
     const oldHandshake = signChannelMessage(SECRET, {
-      protocolVersion: 1, type: 'handshake', requestId: randomUUID(),
+      protocolVersion: version, type: 'handshake', requestId: randomUUID(),
       issuedAt: new Date().toISOString(), nonce: randomBytes(24).toString('hex'),
     })
     expect(await sendRaw(oldHandshake)).toMatchObject({ type: 'channel.error', code: 'request_invalid' })

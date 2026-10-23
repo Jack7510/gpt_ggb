@@ -1,4 +1,4 @@
-import type { PluginCoreBuildFailure } from '@ggb-copilot/application/browser'
+import type { PluginCoreProgress, PluginCoreBuildFailure } from '@ggb-copilot/application/browser'
 
 /** Plugin-core run state folded from the durable view and SSE events. */
 export interface ProjectedRunState {
@@ -11,6 +11,7 @@ export interface ProjectedRunState {
   startedAt: string | null
   finalMessage: string | null
   failure: { code: string; message: string; details?: PluginCoreBuildFailure | undefined } | null
+  progress?: PluginCoreProgress | null
   terminal: boolean
 }
 

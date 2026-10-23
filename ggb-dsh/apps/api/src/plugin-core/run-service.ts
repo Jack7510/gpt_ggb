@@ -1,4 +1,4 @@
-import { pluginCoreImageSchema, type PluginCoreImage, type PluginCoreBuildFailure } from '@ggb-copilot/application'
+import { pluginCoreImageSchema, type PluginCoreImage, type PluginCoreBuildFailure, type PluginCoreProgressObserver } from '@ggb-copilot/application'
 import { createHash } from 'node:crypto'
 import {
   agentEngineSchema, bodyDigest, canonicalJson, isTerminalPluginCorePhase,
@@ -19,7 +19,7 @@ const MAX_BASE_BYTES = 8 * 1024 * 1024
 
 export interface PluginCoreWorkerPort {
   runPluginCore(request: { deliveryContract?: 'legacy' | 'receipt-v1'; runId: RunId; providerKey: string; prompt: string;
-    image?: PluginCoreImage; base?: ChannelPluginCoreBase | null }, signal?: AbortSignal): Promise<ChannelPluginCoreResult>
+    image?: PluginCoreImage; base?: ChannelPluginCoreBase | null }, signal?: AbortSignal, onProgress?: PluginCoreProgressObserver): Promise<ChannelPluginCoreResult>
 }
 
 export interface PluginCoreRunServiceConfig {
@@ -226,13 +226,16 @@ export class PluginCoreRunService {
   }
 
   private async viewOf(record: PluginCoreRunRecord): Promise<PluginCoreRunView> {
-    const [earliest, latest] = await Promise.all([
-      this.store.earliestEventId(record.runId as RunId),
-      this.store.latestEventId(record.runId as RunId),
-    ])
+    // Read a bounded, durable prefix first. No event newer than this cursor is skipped on reconnect.
+    const events = await this.store.listEvents(record.runId as RunId, 0, 512)
+    const earliest = events[0]?.eventId ?? null
+    const latest = events.at(-1)?.eventId ?? null
+    const progressEvent = [...events].reverse().find(event => event.payload.type === 'plugin_core.progress')
+    record = await this.store.getRun(record.runId as RunId) ?? record
     return {
       runId: record.runId,
       engine: 'plugin_core',
+      progress: progressEvent?.payload.type === 'plugin_core.progress' ? progressEvent.payload.progress : null,
       phase: record.phase,
       stopRequested: record.stopRequested,
       finalResponse: record.finalResponse,
@@ -261,7 +264,10 @@ export class PluginCoreRunService {
       dispatchPending = true
       const result = await this.worker.runPluginCore({
         runId, providerKey, prompt: record.prompt, base, ...(image === undefined ? {} : { image }), deliveryContract: record.deliveryContract ?? 'legacy',
-      }, controller.signal)
+      }, controller.signal, async progress => {
+        await this.store.appendEvents(runId, [{ payload: { type: 'plugin_core.progress', progress },
+          occurredAt: progress.occurredAt }])
+      })
       dispatchPending = false
       const durationMs = result.durationMs ?? Date.now() - started
       const usage = usageOf(result)
@@ -346,6 +352,7 @@ export class PluginCoreRunService {
         sha256: item.sha256, contentType: item.contentType,
       })),
       verification: delivery.verification,
+      ...(delivery.construction ? { construction: delivery.construction } : {}),
       ...(result.cleanup ? { cleanup: result.cleanup } : {}),
       ...(delivery.trustedBuild ? { trustedBuild: delivery.trustedBuild } : {}),
     }

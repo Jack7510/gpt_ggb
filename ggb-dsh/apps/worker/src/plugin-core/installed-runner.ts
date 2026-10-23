@@ -9,6 +9,7 @@ import { channelPluginCoreDeliverySchema, PLUGIN_CORE_LIMITS, toolArgumentsDiges
 import { PluginCoreProcessRunner, type PluginCoreBaseInput, type PluginCoreInspectResult, type PluginCoreRunResult } from './process-runner.js'
 import type { PluginCoreToolRequest } from './gateway.js'
 import type { PluginCoreExecutionState } from './execution-state.js'
+import { createConstructionRecord } from './construction-record.js'
 import { buildFailure } from './failure-details.js'
 
 interface ReceiptArtifact { kind: 'result_ggb' | 'verification' | 'manifest' | 'preview';
@@ -185,6 +186,7 @@ export class InstalledPluginCoreRunner {
     return channelPluginCoreDeliverySchema.parse({ id: digest(ggb), ggbBase64: ggb.toString('base64'), ggbBytes: ggb.length,
       screenshotBase64: bytes.get('preview')?.toString('base64') ?? null,
       verification: receipt.verification.summary, trustedBuild,
+      construction: createConstructionRecord(request, binding),
       reportBase64: bytes.get('verification')!.toString('base64'),
       manifestBase64: bytes.get('manifest')!.toString('base64') })
   }

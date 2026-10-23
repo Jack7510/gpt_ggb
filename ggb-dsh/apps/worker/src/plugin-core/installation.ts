@@ -1,3 +1,4 @@
+import { INTERNAL_CHANNEL_PROTOCOL_VERSION } from '@ggb-copilot/application'
 import { createHash } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { readFile, realpath, stat } from 'node:fs/promises'
@@ -46,7 +47,7 @@ export async function loadInstalledPlugin(root: string, lockPath: string): Promi
     || installation.hostProtocolVersion !== lock.hostProtocolVersion || installation.receiptSchemaVersion !== lock.receiptSchemaVersion
     || installation.runtimeIdentity.geogebraVersion !== lock.geogebra.version
     || installation.runtimeIdentity.geogebraSha256 !== lock.geogebra.sha256
-    || installation.runtimeIdentity.playwrightVersion !== lock.playwright || lock.channelProtocolVersion !== 5) {
+    || installation.runtimeIdentity.playwrightVersion !== lock.playwright || lock.channelProtocolVersion !== INTERNAL_CHANNEL_PROTOCOL_VERSION) {
     throw new Error('plugin_core_release_identity_mismatch')
   }
   return { root: canonical, serverPatch: installation.serverPatch, sdkVersion: lock.sdkVersion,

@@ -31,7 +31,7 @@ export function describeRunStatus(
   return {
     tone: 'working',
     label: total === null ? text(locale, 'working') : `${text(locale, 'working')} · ${total}`,
-    detail: text(locale, 'workingDetail'),
+    detail: run.progress ? describeToolProgress(run.progress, locale) : text(locale, 'workingDetail'),
   }
 }
 
@@ -47,4 +47,17 @@ function elapsed(startedAt: string | null, nowMs: number): string | null {
 /** Describe the browser provider-key requirement without echoing provider text. */
 export function credentialRequiredNotice(hasProviderKey: boolean, locale: PresentationLocale): string {
   return text(locale, hasProviderKey ? 'resumeReadyDetail' : 'keyRequiredNotice')
+}
+
+function describeToolProgress(progress: NonNullable<ProjectedRunState['progress']>, locale: PresentationLocale): string {
+  const zh = locale === 'zh-CN'
+  const tool = { ggb_inspect: zh ? '读取参考或基线' : 'Read reference or baseline',
+    ggb_check: zh ? '结构预检' : 'Structural check',
+    ggb_build: zh ? '构造与核验' : 'Construction and verification' }[progress.tool]
+  const attempt = progress.status === 'started' && progress.attempt !== undefined
+    ? ` (${progress.attempt}/${progress.limit})` : ''
+  const status = { started: zh ? '调用中' : 'Running', accepted: zh ? '已接受工具结果' : 'Tool result accepted',
+    rejected: zh ? '调用被拒绝，等待后续处理' : 'Call rejected; awaiting further processing',
+    failed: zh ? '调用异常，等待任务结算' : 'Call failed; awaiting task outcome' }[progress.status]
+  return `${tool}${attempt} · ${status}`
 }

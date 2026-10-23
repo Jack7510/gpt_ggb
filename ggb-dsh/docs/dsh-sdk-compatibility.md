@@ -27,7 +27,7 @@
 | 插件 | `ggb-plugins-dsh@0.8.3`；来自本地修改源码的 development-build，尚未发布 |
 | 发行包 SHA-256 | `c0bd9d50ae405683cc063c8373a6bcad91f67e80279ff7a9be81dc9b90f4faae` |
 | Worker Skill SHA-256 | `53219ac33eaf396fbbfe3184ac6b9852dff2058cce0c969c1184f002204176d0` |
-| 工具 / executor / receipt / API↔Worker | 协议 `2` / envelope `3` / schema `2` / channel `5`；桌面 CLI 保持 envelope `1` |
+| 工具 / executor / receipt / API↔Worker | 协议 `2` / envelope `3` / schema `2` / channel `6`；桌面 CLI 保持 envelope `1` |
 | 插件 GeoGebra | `5.4.932.1`；归档 SHA-256 见 vendor lock |
 | Playwright | `1.64.1`；执行器选择该包管理的 Chromium，不依赖系统 Chrome |
 | Client applet | `5.4.929.3`，独立于插件 runtime；没有随本次切换升级 |
@@ -176,7 +176,7 @@ manifest 的文件名、runtime 和摘要语义由插件 validateHostMaterial �
 
 ## 可信交付与取消结算
 
-开发默认装配使用安装插件和可信回执；API 与 Worker 必须一起使用内部通道 5。
+开发默认装配使用安装插件和可信回执；API 与 Worker 必须一起使用内部通道 6。
 没有保留旧固定目录交付入口，也不能从报文自动选择旧版本。
 
 | 边界 | 执行契约 |
@@ -354,7 +354,7 @@ Worker 在本次 build 的独立目录读取 CLI 失败、`run.json` 和 `verifi
 ## Review 后续兼容边界
 
 回执 schema 2 只携带报告字节引用和 2 KiB 内的摘要。完整报告单独传输。
-API 与 Worker 使用通道 5；不能与通道 4 混用。执行器保持 3，工具和上下文保持 2。
+API 与 Worker 使用通道 6；不能与通道 5 及更早版本混用。执行器保持 3，工具和上下文保持 2。
 GGB/preview/报告/manifest 原始上限分别为 6/3/1/1 MiB；交付 JSON 为 16 MiB，响应帧为 17 MiB。
 插件公开 LIMITS、宿主 schema、接受边界及原子提交共同执行这些上限。API 按 run 隔离连接。
 预览缺失不影响 completed；存在但非法时拒绝。基线在插件执行前后及宿主接受时核对。

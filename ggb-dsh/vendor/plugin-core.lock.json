@@ -17,7 +17,7 @@
   "cordisVersion": "4.0.5",
   "hostProtocolVersion": 2,
   "receiptSchemaVersion": 2,
-  "channelProtocolVersion": 5,
+  "channelProtocolVersion": 6,
   "workerSkillSha256": "53219ac33eaf396fbbfe3184ac6b9852dff2058cce0c969c1184f002204176d0",
   "files": {
     "LICENSE": "ddc576d86dcc9dbcc3201ca060c0476aaf7ef9802b634bf693fe82f990506b74",

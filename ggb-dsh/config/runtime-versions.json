@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-22",
+  "updatedAt": "2026-10-23",
   "node": {
     "supportedRange": "^22.19.0 || >=24.0.0",
     "role": "API/Worker and DSH runtime",
@@ -32,7 +32,7 @@
     },
     "hostProtocolVersion": 2,
     "receiptSchemaVersion": 2,
-    "channelProtocolVersion": 5,
+    "channelProtocolVersion": 6,
     "executorProtocolVersion": 3
   }
 }

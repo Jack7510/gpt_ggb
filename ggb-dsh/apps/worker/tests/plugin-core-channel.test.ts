@@ -72,7 +72,7 @@ describe('plugin-core internal channel', () => {
       expect(pluginCore).toHaveBeenCalledTimes(1)
       expect(pluginCore).toHaveBeenCalledWith(expect.objectContaining({
         runId, prompt: 'draw a circle', credential: { providerKey: 'provider-key' }, base, image,
-      }))
+      }), expect.any(Function))
     } finally {
       client.close()
       await server.close()

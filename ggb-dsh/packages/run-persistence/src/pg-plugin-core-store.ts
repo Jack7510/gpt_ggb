@@ -249,10 +249,22 @@ export class PgPluginCoreStore implements PluginCoreStore {
 
   async appendEvents(runId: RunId, events: readonly PluginCoreEventAppend[]): Promise<PluginCoreEvent[]> {
     return this.transaction(async (client) => {
-      const exists = await client.query(
-        'SELECT 1 FROM plugin_core_runs WHERE run_id = $1 FOR UPDATE', [runId])
+      const exists = await client.query<{ phase: string; stop_requested: boolean }>(
+        'SELECT phase, stop_requested FROM plugin_core_runs WHERE run_id = $1 FOR UPDATE', [runId])
       if (exists.rowCount !== 1) return []
-      return appendEvents(client, runId, events)
+      const row = exists.rows[0]!
+      const previous = await client.query<{ sequence: number }>(
+        `SELECT (payload->'progress'->>'sequence')::int AS sequence FROM plugin_core_events
+         WHERE run_id = $1 AND payload->>'type' = 'plugin_core.progress' ORDER BY event_id DESC LIMIT 1`, [runId])
+      let sequence = previous.rows[0]?.sequence ?? 0
+      return appendEvents(client, runId, events.filter(event => {
+        if (event.payload.type !== 'plugin_core.progress') return true
+        const payload = pluginCoreEventPayloadSchema.parse(event.payload)
+        if (payload.type !== 'plugin_core.progress' || row.phase !== 'running' || row.stop_requested
+          || payload.progress.sequence <= sequence) return false
+        sequence = payload.progress.sequence
+        return true
+      }))
     })
   }
 

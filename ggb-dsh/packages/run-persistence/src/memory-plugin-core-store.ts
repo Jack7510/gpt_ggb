@@ -225,7 +225,19 @@ export class MemoryPluginCoreStore implements PluginCoreStore {
   }
 
   async appendEvents(runId: RunId, events: readonly PluginCoreEventAppend[]): Promise<PluginCoreEvent[]> {
-    return this.appendTo(runId, events)
+    const record = this.runs.get(runId)
+    let sequence = 0
+    for (const event of this.events.get(runId) ?? []) {
+      if (event.payload.type === 'plugin_core.progress') sequence = event.payload.progress.sequence
+    }
+    return this.appendTo(runId, events.filter(event => {
+      if (event.payload.type !== 'plugin_core.progress') return true
+      const payload = pluginCoreEventPayloadSchema.parse(event.payload)
+      if (payload.type !== 'plugin_core.progress' || record?.phase !== 'running'
+        || record.stopRequested || payload.progress.sequence <= sequence) return false
+      sequence = payload.progress.sequence
+      return true
+    }))
   }
 
   async listEvents(runId: RunId, afterEventId: number, limit: number): Promise<PluginCoreEvent[]> {

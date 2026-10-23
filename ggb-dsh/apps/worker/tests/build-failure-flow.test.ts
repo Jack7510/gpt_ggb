@@ -56,10 +56,10 @@ describe('build failure through Worker, authenticated channel, API, store and cl
       } } as unknown as PluginCoreDshRunner
       const worker = new PluginCoreService(dsh, { outputRoot: root, state, resetRun: id => gateway.resetRun(id) })
       const channel = new InternalChannelServer({ socketPath: join(root, 'channel.sock'), secret,
-        workerInstanceId: 'test', maxMessageBytes: 16 * 1024 * 1024 }, { pluginCore: request => worker.run({
+        workerInstanceId: 'test', maxMessageBytes: 16 * 1024 * 1024 }, { pluginCore: (request, onProgress) => worker.run({
           runId: request.runId, deliveryContract: request.deliveryContract, prompt: request.prompt,
           providerKey: request.credential.providerKey!,
-        }) })
+        }, onProgress) })
       await channel.listen()
       const dispatch = new WorkerDispatchClient(join(root, 'channel.sock'), secret, 2000)
       const store = new MemoryPluginCoreStore()
@@ -90,6 +90,8 @@ describe('build failure through Worker, authenticated channel, API, store and cl
         }
         const event = (await store.listEvents(runId, 0, 20)).find(e => e.payload.type === 'plugin_core.failed')!
         expect(event.payload).toMatchObject({ details })
+        expect(view.progress?.status).toBe(mode === 'not_built' ? undefined : 'rejected')
+        expect(view.progress?.tool).toBe(mode === 'not_built' ? undefined : 'ggb_build')
         const notices: string[] = []
         await adapter.openEventStream(runId, 'token', event.eventId, {
           onReady: ready => { notices.push(failureMessage(pluginViewState(ready.run).failure!, 'zh-CN')) },

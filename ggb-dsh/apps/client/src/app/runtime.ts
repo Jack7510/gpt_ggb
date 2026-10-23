@@ -1,5 +1,7 @@
+import { reconnectPluginStream } from '../runtime/reconnect-plugin-stream.js'
+import { titleFromPrompt } from '../sessions/session-title.js'
 import { failureMessage } from './failure-message.js'
-import { pluginCoreImageSchema, type PluginCoreImage, type PluginCoreBuildFailure } from '@ggb-copilot/application/browser'
+import { pluginCoreImageSchema, type PluginCoreImage, type PluginCoreBuildFailure, type PluginCoreConstructionRecord, pluginCoreDeliverySchema } from '@ggb-copilot/application/browser'
 import type { CanvasViews } from '../geogebra/view-settings.js'
 import {
   type PluginCoreDelivery,
@@ -52,6 +54,7 @@ export interface SessionView {
   canvas: LocalCanvasBinding | null
   /** Latest completed plugin-core delivery in this Session. */
   delivery: LocalPluginDelivery | null
+  constructionReports: Record<string, PluginCoreConstructionRecord>
 }
 
 export interface ClientRuntimeNotice {
@@ -197,6 +200,8 @@ export class ClientRuntime {
       runs,
       canvas: await this.sessions.getActiveCanvas(sessionId),
       delivery,
+      constructionReports: Object.fromEntries(bindings.flatMap(binding => binding.delivery?.construction
+        ? [[binding.runId, binding.delivery.construction]] : [])),
     }
   }
 
@@ -342,6 +347,12 @@ export class ClientRuntime {
       sessionId, role: 'user', content: prompt, runId: capability.runId,
       deliveryState: 'submitting',
     })
+    const firstUser = (await this.sessions.listMessages(sessionId)).find(message => message.role === 'user')
+    if (firstUser?.messageId === userMessage.messageId && await this.sessions.applySuggestedTitle(sessionId,
+      titleFromPrompt(prompt, attachment !== undefined, this.options.presentationLocale))) {
+      this.coordinator.publish('session_updated', sessionId)
+      this.changed(sessionId)
+    }
     const binding: LocalRunBinding = {
       runId: capability.runId,
       sessionId,
@@ -408,19 +419,27 @@ export class ClientRuntime {
 
   private async streamPluginRun(binding: LocalRunBinding,
     connection: PluginConnection, signal: AbortSignal): Promise<void> {
+    let finalized = false
     try {
-      await this.pluginAdapter.openEventStream(binding.runId, connection.runToken,
-        binding.eventCursor, {
+      await reconnectPluginStream(after => this.pluginAdapter.openEventStream(binding.runId, connection.runToken,
+        after, {
           onReady: async (ready) => {
+            if (signal.aborted || (connection.state.terminal && (!ready.terminal || ready.run.phase !== connection.state.phase)) || ready.run.runId !== binding.runId
+              || ready.cursor < connection.state.eventCursor) return
             // The snapshot covers persisted events through ready.cursor; retain that resume point.
             await this.repository.updateRunBinding(binding.runId, {
-              eventCursor: Math.max(binding.eventCursor, ready.cursor),
+              eventCursor: Math.max(connection.state.eventCursor, ready.cursor),
             })
             connection.state = pluginViewState(ready.run)
             this.changed(binding.sessionId)
-            if (ready.terminal) await this.finishPluginRun(binding, ready.run, signal)
+            if (ready.terminal) {
+              await this.finishPluginRun(binding, ready.run, signal)
+              finalized = true
+            }
           },
           onEvent: async (event) => {
+            if (signal.aborted || connection.state.terminal || event.runId !== binding.runId
+              || event.eventId <= connection.state.eventCursor) return
             connection.state = applyPluginEvent(connection.state, event)
             this.changed(binding.sessionId)
             const terminal = event.payload.type === 'plugin_core.delivery'
@@ -435,11 +454,12 @@ export class ClientRuntime {
             }
             const view = await this.pluginAdapter.getRun(binding.runId, connection.runToken)
             await this.finishPluginRun(binding, view, signal)
+            finalized = true
           },
-          onCursor: async (cursor) => {
-            await this.repository.updateRunBinding(binding.runId, { eventCursor: cursor })
+          onCursor: async () => {
+            await this.repository.updateRunBinding(binding.runId, { eventCursor: connection.state.eventCursor })
           },
-        }, signal)
+        }, signal), () => connection.state.eventCursor, () => finalized, signal)
     } catch (error) {
       if (signal.aborted) return
       this.notify({ sessionId: binding.sessionId, kind: 'error', detail: errorText(error) })
@@ -472,6 +492,7 @@ export class ClientRuntime {
       return
     }
     if (view.delivery === null) return
+    const acceptedDelivery = pluginCoreDeliverySchema.parse(view.delivery)
     const metadata = view.delivery.artifacts.find(artifact => artifact.kind === 'result_ggb')
     if (metadata === undefined) {
       this.notify({ sessionId: binding.sessionId, kind: 'error',
@@ -497,6 +518,7 @@ export class ClientRuntime {
       sha256: metadata.sha256,
       bytes: metadata.sizeBytes,
       ggbOpfsPath,
+      ...(acceptedDelivery.construction ? { construction: acceptedDelivery.construction } : {}),
       verification: view.delivery.verification,
       usage: view.usage === null ? null : {
         calls: view.usage.calls,

@@ -1,3 +1,5 @@
+import { DEFAULT_SESSION_TITLE, titleFromPrompt } from './session-title.js'
+export { DEFAULT_SESSION_TITLE } from './session-title.js'
 import type { LocalCanvasBinding, LocalMessage, LocalMessageRole, LocalRunBinding, LocalConversationSession, SessionRepository, SessionSummary } from './session-repository.js'
 
 /** Best-effort remote stop used before local deletion (§3.1); never receives a sessionId. */
@@ -23,8 +25,6 @@ export interface CreateSessionOptions {
   sessionId?: string
 }
 
-export const DEFAULT_SESSION_TITLE = 'New session'
-const DEFAULT_SESSION_TITLES = new Set([DEFAULT_SESSION_TITLE, '新会话'])
 const DELETE_STOP_WAIT_MS = 2_000
 
 /**
@@ -55,20 +55,17 @@ export class SessionService {
   public async renameSession(sessionId: string, title: string): Promise<void> {
     const trimmed = title.trim()
     if (trimmed.length === 0) throw new Error('session_title_empty')
-    await this.deps.repository.updateSession(sessionId, { title: trimmed.slice(0, 200), updatedAt: this.deps.now() })
+    await this.deps.repository.updateSession(sessionId, { title: trimmed.slice(0, 200), titleSource: 'manual', updatedAt: this.deps.now() })
   }
 
   /**
-   * Names a new local Session from the first completed Intake. A manual name is
+   * Names a local Session from its first submitted user message. A manual name is
    * authoritative, so late/replayed events cannot replace it.
    */
   public async applySuggestedTitle(sessionId: string, suggestedTitle: string): Promise<boolean> {
-    const title = suggestedTitle.replace(/\s+/gu, ' ').trim().slice(0, 120)
+    const title = titleFromPrompt(suggestedTitle, false, 'en')
     if (title.length === 0) return false
-    const session = await this.deps.repository.getSession(sessionId)
-    if (session === null || !DEFAULT_SESSION_TITLES.has(session.title)) return false
-    await this.deps.repository.updateSession(sessionId, { title, updatedAt: this.deps.now() })
-    return true
+    return await this.deps.repository.applySuggestedTitle(sessionId, title, this.deps.now())
   }
 
   /** Marks a Session as the last opened one without changing its content. */

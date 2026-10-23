@@ -7,6 +7,8 @@ import { initialProjectedState, type ProjectedRunState } from './run-state.js'
 export function pluginViewState(view: PluginCoreRunView): ProjectedRunState {
   const state = initialProjectedState(view.runId, view.phase, view.createdAt)
   state.eventCursor = view.events.latestEventId ?? 0
+  state.progress = view.progress ?? null
+  state.stopRequested = view.stopRequested
   state.finalMessage = view.finalResponse
   state.failure = view.failure === null ? null : {
     code: view.failure.code, message: view.failure.message,
@@ -18,9 +20,13 @@ export function pluginViewState(view: PluginCoreRunView): ProjectedRunState {
 
 export function applyPluginEvent(state: ProjectedRunState,
   event: PluginCoreEvent): ProjectedRunState {
+  if (event.runId !== state.runId || event.eventId <= state.eventCursor || state.terminal) return state
   const next = { ...state, eventCursor: event.eventId }
   const payload = event.payload
   switch (payload.type) {
+    case 'plugin_core.progress':
+      if (!state.stopRequested && payload.progress.sequence > (state.progress?.sequence ?? 0)) next.progress = payload.progress
+      return next
     case 'plugin_core.phase':
       next.phase = payload.phase
       next.terminal = payload.phase === 'completed' || payload.phase === 'failed'

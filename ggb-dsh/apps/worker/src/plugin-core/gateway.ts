@@ -108,11 +108,15 @@ export class PluginCoreGateway {
       protocolVersion: request.protocolVersion ?? 2, arguments: wireArguments,
       argumentsDigest: request.argumentsDigest ?? toolArgumentsDigest(wireArguments),
       domainRequestDigest: toolArgumentsDigest(request.arguments) })
+    const callId = randomUUID()
     try {
-      const result = await this.execute(request, signal, call)
+      const result = await this.execute(request, signal, call, callId)
+      this.options.state?.reportProgress(request.runId, { tool: request.toolName, status: result.status, callId,
+        ...(result.report?.buildId ? { buildId: result.report.buildId } : {}) })
       await call?.update(result.status)
       return (turn?.model(result) ?? redactEvidence(result, [], true)) as PluginCoreToolResult
     } catch (error) {
+      this.options.state?.reportProgress(request.runId, { tool: request.toolName, status: 'failed', callId })
       if (error instanceof Error && error.message === 'plugin_core_cleanup_failed') {
         await this.options.state?.quarantine(request.runId)
       }
@@ -122,10 +126,12 @@ export class PluginCoreGateway {
   }
 
   private async execute(request: PluginCoreToolRequest, signal?: AbortSignal,
-    call?: ToolCallEvidence): Promise<PluginCoreToolResult> {
+    call?: ToolCallEvidence, callId = randomUUID()): Promise<PluginCoreToolResult> {
     if (signal?.aborted === true) throw new Error('plugin_core_tool_cancelled')
     const runId = runIdSchema.parse(request.runId)
     const pluginRequest = request.arguments
+    if (request.toolName !== 'ggb_build') this.options.state?.reportProgress(request.runId, {
+      tool: request.toolName, status: 'started', callId })
     const base = this.options.bases?.get(runId)
     if (request.toolName === 'ggb_inspect') {
       const args = pluginRequest as { reference?: unknown } | null
@@ -167,11 +173,11 @@ export class PluginCoreGateway {
       return this.rejected(request.toolName as PluginCoreToolName, 'unknown_tool',
         `Unknown plugin-core tool: ${String(request.toolName)}`)
     }
-    return await this.build(request, pluginRequest, runId, signal, call)
+    return await this.build(request, pluginRequest, runId, signal, call, callId)
   }
 
   private async build(request: PluginCoreToolRequest, pluginRequest: unknown,
-    runId: RunId, signal?: AbortSignal, call?: ToolCallEvidence): Promise<PluginCoreToolResult> {
+    runId: RunId, signal?: AbortSignal, call?: ToolCallEvidence, callId = randomUUID()): Promise<PluginCoreToolResult> {
     const base = this.options.bases?.get(runId)
     const builds = this.builds.get(runId) ?? 0
     const limit = this.options.maxBuildsPerRun ?? DEFAULT_MAX_BUILDS_PER_RUN
@@ -182,6 +188,8 @@ export class PluginCoreGateway {
     // Reserve before the side effect so a crash or timeout still counts as an attempt.
     this.builds.set(runId, builds + 1)
     const buildId = randomUUID()
+    this.options.state?.reportProgress(runId, { tool: 'ggb_build', status: 'started', callId,
+      buildId, attempt: builds + 1, limit })
     this.options.state?.invalidate(runId)
     this.options.state?.startBuild(runId, buildId)
     await call?.update('started', { operation: 'build', buildId, baseSha256: base?.sha256 ?? null })

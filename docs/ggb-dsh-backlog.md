@@ -1,6 +1,6 @@
 # GGB DSH 统一 Backlog
 
-更新：2026-10-22。当前引擎为 plugin-core；Native 九阶段已删除，删除前代码保存在标签
+更新：2026-10-23。当前引擎为 plugin-core；Native 九阶段已删除，删除前代码保存在标签
 `archive/native-nine-stage-pre-plugin-core`。本文只维护未完成工作、根因、依赖与退出条件；
 设计取舍见 [采用方案](ggb-dsh-plugin-core-adoption.md)，已验证证据见
 [切换交接](ggb-dsh-plugin-core-cutover-handoff.md)。
@@ -27,6 +27,17 @@
 | IP-E | P1 | 待验证 | 安装插件真实 Provider 与部署验收 | 本机完整供应、doctor、真实构图/取消及 mock Harness 的 PWA 全链已通过；一次真实 PWA 画圆已通过；两轮正多边形失败已定位到 Provider 非法 JSON，当前包一次真实正多边形交付通过；生产环境未验收 | 分别授权后完成复杂题回归、目标环境发布与部署层回收验收 |
 
 ## 2. 已完成（不再作为当前工作）
+
+- 工具级真实进度（2026-10-23）：网关发布三工具的实际开始、接受、拒绝及执行异常，经认证 run 连接、API 事件存储和 SSE 进入 Client。
+  内部通道升级为 6，握手双向验证版本；发行兼容锁同步。进度不会结束最终结果 waiter，不包含工具参数、模型文本或百分比。
+  每 run 最多 128 条，连接积压时丢弃进度，观察异常不影响工具执行；配额拒绝不显示新构建，预检退款可复用预算槽位。
+  Store 原子拒绝停止及终态后的进度；Client 拒绝其他 run、旧游标、倒退顺序和终态回退。
+  ready 快照包含游标覆盖的最新工具事实；Client 对断线和提前 EOF 最多重连 4 次，不重建任务或重放构建。
+  最终事件后的快照下载断线也可恢复交付，保持终态。
+  本轮完整离线回归 642 项通过、5 项默认跳过；包括真实本机 Unix socket/HTTP/SSE、mock Harness/构建和 PWA 运行时的断线恢复。
+  PostgreSQL 行锁分支使用离线驱动替身，未声称真实 PostgreSQL 并发验收。
+  Worker/API/Client/Store TypeScript、Client Vue 类型与 bundle、共享 lint、质量及工作区边界检查通过。
+  证据位于 `output/tool-progress-*.log`。未调用真实 Provider、真实 GeoGebra 或执行生产部署；未新增数据库 DDL。
 
 - PC-07：两轮 MALFORMED_RESPONSE 定位与契约修复（2026-10-22）：
   两轮完整 wire 参数均含多余结束括号，与 SDK 最终参数 SHA-256 一致；SDK 没有制造非法 JSON。

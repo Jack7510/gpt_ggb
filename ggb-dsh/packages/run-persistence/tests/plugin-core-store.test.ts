@@ -78,6 +78,46 @@ function contract(name: string, factory: () => PluginCoreStore | Promise<PluginC
       } finally { await cleanup() }
     })
 
+    it('atomically rejects stale, stopped and terminal progress', async () => {
+      const store = await factory()
+      try {
+        await store.createRun(spec())
+        const fact = { tool: 'ggb_check' as const, status: 'started' as const,
+          callId: '11111111-1111-4111-8111-111111111111', sequence: 1, occurredAt: now }
+        const append = (sequence: number) => store.appendEvents(runId, [{ occurredAt: now,
+          payload: { type: 'plugin_core.progress', progress: { ...fact, sequence } } }])
+        expect(await append(1)).toEqual([])
+        await store.markRunning(runId)
+        expect(await append(1)).toHaveLength(1)
+        expect(await append(1)).toEqual([])
+        expect(await append(3)).toHaveLength(1)
+        expect(await append(2)).toEqual([])
+        await store.requestStop(runId)
+        expect(await append(4)).toEqual([])
+        await store.cancelRun(runId, '2026-10-24T00:00:00.000Z', { runId, confirmed: true, completedAt: now })
+        expect(await append(5)).toEqual([])
+        expect((await store.listEvents(runId, 0, 20)).filter(e => e.payload.type === 'plugin_core.progress')).toHaveLength(2)
+      } finally { await cleanup() }
+    })
+
+    it.each(['completed', 'failed'] as const)('rejects progress after %s commits', async phase => {
+      const store = await factory()
+      try {
+        await store.createRun(spec())
+        await store.markRunning(runId)
+        if (phase === 'completed') expect(await store.completeRun(completion())).toBe('committed')
+        else expect(await store.failRun({ runId, failure: { code: 'plugin_core_failed', message: 'fixture' },
+          usage: null, durationMs: 1, modelId: 'fixture', expiresAt: '2026-10-24T00:00:00.000Z',
+          cleanup: { runId, confirmed: true, completedAt: now } })).toBe('committed')
+        const cursor = await store.latestEventId(runId)
+        expect(await store.appendEvents(runId, [{ occurredAt: now, payload: { type: 'plugin_core.progress',
+          progress: { tool: 'ggb_check', status: 'started', callId: '11111111-1111-4111-8111-111111111111',
+            sequence: 1, occurredAt: now } } }])).toEqual([])
+        expect(await store.latestEventId(runId)).toBe(cursor)
+        expect((await store.getRun(runId))?.phase).toBe(phase)
+      } finally { await cleanup() }
+    })
+
     it('creates, starts, completes and authorizes artifacts', async () => {
       const store = await factory()
       try {
@@ -214,7 +254,15 @@ function contract(name: string, factory: () => PluginCoreStore | Promise<PluginC
         const mismatched = structuredClone(valid)
         mismatched.delivery.trustedBuild!.binding.requestId = crypto.randomUUID()
         expect(await store.completeRun(mismatched)).toBe('conflict')
+        const binding = valid.delivery.trustedBuild!.binding
+        valid.delivery.construction = { schemaVersion: 1, origin: 'host-accepted-build', buildId: binding.buildId,
+          domainRequestDigest: binding.domainRequestDigest, baseSha256: binding.baseSha256, text: 'accepted steps\n' }
+        const wrongReport = structuredClone(valid)
+        wrongReport.delivery.construction!.buildId = crypto.randomUUID()
+        expect(await store.completeRun(wrongReport)).toBe('conflict')
         expect(await store.completeRun(valid)).toBe('committed')
+        expect((await store.getRun(runId))?.delivery?.construction).toEqual(valid.delivery.construction)
+        expect((await store.listEvents(runId, 0, 20)).at(-1)?.payload).toMatchObject({ delivery: { construction: valid.delivery.construction } })
         expect((await store.getRun(runId))?.delivery?.trustedBuild).toEqual(valid.delivery.trustedBuild)
         for (const artifact of valid.artifacts) {
           expect((await store.getArtifact(runId, artifact.artifactId))?.contentBase64).toBe(artifact.contentBase64)

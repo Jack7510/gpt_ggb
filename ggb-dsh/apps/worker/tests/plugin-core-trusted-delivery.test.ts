@@ -124,6 +124,10 @@ describe.skipIf(!root)('installed receipt and trusted delivery (synthetic facts,
     expect(result.delivery?.id).toBe(hash('PKsynthetic'))
     expect(Buffer.from(result.delivery!.reportBase64!, 'base64')).toEqual(f.reportBytes())
     expect(result.delivery?.trustedBuild?.binding.runId).toBe(runId)
+    expect(result.delivery?.construction).toMatchObject({ origin: 'host-accepted-build',
+      buildId: result.delivery!.trustedBuild!.binding.buildId, domainRequestDigest: result.delivery!.trustedBuild!.binding.domainRequestDigest })
+    expect(result.delivery?.construction?.text).toContain('\"op\":\"freePoint\"')
+    expect(result.delivery?.construction?.text).not.toContain('requirements')
     expect(result.delivery?.trustedBuild?.receiptSha256).toMatch(/^[a-f0-9]{64}$/)
     expect(f.state.candidate(runId)).toBeNull() // resources released after projection
   })

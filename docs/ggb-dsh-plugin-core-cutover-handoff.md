@@ -11,13 +11,13 @@
 - `GGB_AGENT_ENGINE` 只接受 `plugin_core`；缺省值即 `plugin_core`。`GGB_PIPELINE_MODE`、
   `GGB_NATIVE_*`、Native release vector、execution secret/socket 和 worker lease 配置已移除。
 - 开发默认链路通过安装包公开入口加载三工具、Worker Skill 和执行器。SDK、插件摘要、
-  Cordis、runtime、Playwright、工具协议 2、回执 2 与内部通道 5 一起固定；见 [兼容组合](../ggb-dsh/docs/dsh-sdk-compatibility.md)。
+  Cordis、runtime、Playwright、工具协议 2、回执 2 与内部通道 6 一起固定；见 [兼容组合](../ggb-dsh/docs/dsh-sdk-compatibility.md)。
 - API/Worker 使用独立的 `plugin_core_*` store、SSE 与产物鉴权。
 - 模型固定为 `deepseek-flash`、reasoning high、49,152 max tokens
   （`packages/application/src/plugin-core-model-policy.ts`）。
 - Worker 的模型提示词由插件包的 `skills/ggb-construction/worker.md` 提供，启动时校验
   `capabilities.json` 的请求协议、profile 版本和 SHA-256；ggb-dsh 不再保存第二份 Skill。
-- 当前开发树要求迁移 017、018 和内部通道 5；新任务固定 `deliveryContract=receipt-v1`，旧入口已清理。
+- 当前开发树要求迁移 017、018 和内部通道 6；新任务固定 `deliveryContract=receipt-v1`，旧入口已清理。
   批次 E 已在开发默认安装根完成完整供应和 doctor，并以 mock Harness 验证真实构图、可信交付及 renderer 出现后的取消清理。
   后续 mock Harness 的 PWA HTTP/SSE、下载、画布加载与编辑后基线续做也已通过。
   尚未调用真实 Provider 或部署生产。本次证据见 Backlog；下方 2026-10-17 的真实验收仍属于原切换批次。

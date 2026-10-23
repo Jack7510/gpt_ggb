@@ -35,6 +35,7 @@
             </button>
           </div>
           <div v-if="message.role === 'final_report'" class="formatted-message" v-html="renderSafeMarkdown(message.content)"></div><p v-else>{{ message.content }}</p>
+          <ConstructionRecord v-for="report in reportsFor(message.role === 'final_report' ? message.runId : null)" :key="report.buildId" :report="report" :locale="locale" />
         </li>
         <li v-if="showRunStatus || notice" class="run-feedback" :class="notice?.tone === 'error' ? 'error' : runStatus.tone" aria-live="polite">
           <template v-if="showRunStatus">
@@ -88,6 +89,8 @@ import { SessionSelection } from './session-selection.js'
 import { credentialRequiredNotice, describeRunStatus } from './run-status.js'
 import { text } from './localization.js'
 import { ComposerImages, clipboardImage } from './composer-images.js'
+import type { PluginCoreConstructionRecord } from '@ggb-copilot/application/browser'
+import { ConstructionRecord } from './construction-record.js'
 import { copyMessageContent } from './copy-message.js'
 
 declare const GGB_CLIENT_VERSION: string
@@ -152,6 +155,10 @@ const latestRun = computed(() => {
 const runStatus = computed(() => describeRunStatus(latestRun.value, providerConfigured.value, statusNowMs.value, locale))
 const showRunStatus = computed(() => latestRun.value !== undefined && !latestRun.value.terminal)
 const conversationMessages = computed(() => view.value?.messages ?? [])
+function reportsFor(runId: string | null): PluginCoreConstructionRecord[] {
+  const report = runId === null ? undefined : view.value?.constructionReports?.[runId]
+  return report === undefined ? [] : [report]
+}
 const selectedPrefix = computed(() => {
   const canvas = selectedCanvas.value
   if (canvas === null) return ''
@@ -424,6 +431,9 @@ function noticeFrom(entry: ClientRuntimeNotice): { tone: 'info' | 'error'; text:
 </script>
 
 <style>
+.construction-record { margin-top: 12px; }
+.construction-record pre { max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 10px; background: #f8fafc; font-size: 12px; }
+.construction-actions { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
 .composer-image { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
 .composer-image-preview { display: flex; min-width: 0; gap: 6px; align-items: center; }
 .composer-image-preview img { width: 48px; height: 48px; object-fit: contain; }

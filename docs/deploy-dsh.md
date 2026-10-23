@@ -122,7 +122,7 @@ GGB_V3_DATABASE_URL='postgres://<user>:<password>@<db-host>:5432/<database>' \
 迁移 job 应用；它们不创建 Native 表。
 
 API 与 Worker 启动时通过 `assertPluginCoreSchema` 确认 ledger 已记录 018；缺失或 ledger 不存在时
-在监听前拒绝启动，不回退到 Native。API/Worker 必须一起升级至内部通道 5。生产保持 `GGB_V3_AUTO_MIGRATE=0`，避免 API 与 Worker 启动竞态。
+在监听前拒绝启动，不回退到 Native。API/Worker 必须一起升级至内部通道 6。生产保持 `GGB_V3_AUTO_MIGRATE=0`，避免 API 与 Worker 启动竞态。
 若迁移失败，停止发布，核对 ledger 与备份后按授权的恢复方案处置；不要通过修改 `schema_migrations`
 或跳过 migration 来强行启动服务。
 

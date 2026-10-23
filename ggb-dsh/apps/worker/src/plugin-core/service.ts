@@ -117,8 +117,10 @@ export class PluginCoreService {
 
   /** Run one prompt through the plugin-core DSH path. The provider key stays in memory. */
   async run(input: { readonly runId: RunId; readonly deliveryContract?: 'legacy' | 'receipt-v1'; readonly providerKey: string;
-    readonly prompt: string; readonly image?: PluginCoreImage; readonly base?: PluginCoreBaseInput | null }): Promise<PluginCoreServiceResult> {
-    const result = await this.execute(input)
+    readonly prompt: string; readonly image?: PluginCoreImage; readonly base?: PluginCoreBaseInput | null }, onProgress?: import('@ggb-copilot/application').PluginCoreProgressObserver): Promise<PluginCoreServiceResult> {
+    const stop = onProgress ? this.state.observeProgress(input.runId, onProgress) : () => {}
+    let result: PluginCoreServiceResult
+    try { result = await this.execute(input) } finally { stop() }
     return { ...result, cleanup: { runId: input.runId, confirmed: !this.state.unsafe(input.runId) && result.cleanup?.confirmed !== false,
       completedAt: new Date().toISOString() } }
   }

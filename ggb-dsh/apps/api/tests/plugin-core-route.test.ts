@@ -75,6 +75,32 @@ function request(runId: string, prompt = 'draw a circle') {
 }
 
 describe('plugin-core API route', () => {
+  it('returns the host construction record with its accepted binding in run view and SSE reconnect', async () => {
+    const runId = 'run_00000000-0000-4000-8000-000000000899'
+    const store = new MemoryPluginCoreStore()
+    let accepted: ChannelPluginCoreResult['delivery']
+    const service = new PluginCoreRunService(store, { runPluginCore: async request => {
+      accepted = trustedDelivery(request.runId, { id: 'a'.repeat(64), ggbBase64: Buffer.from('PKfake').toString('base64'),
+        ggbBytes: 6, screenshotBase64: null, verification: {} })
+      const binding = accepted.trustedBuild!.binding
+      accepted.construction = { schemaVersion: 1, origin: 'host-accepted-build', buildId: binding.buildId,
+        domainRequestDigest: binding.domainRequestDigest, baseSha256: binding.baseSha256, text: 'O=(0,0)\n' }
+      return { ...result(accepted), cleanup: { runId: request.runId, confirmed: true, completedAt: new Date().toISOString() } }
+    } }, { engine: 'plugin_core', serverPepper: 'a'.repeat(64), maxConcurrentRuns: 1,
+      activeRunTtlMs: 60000, terminalRunTtlMs: 60000 })
+    const server = await startApiServer({ port: 0, listenHost: '127.0.0.1', maxBodyBytes: 65536,
+      allowedOrigin: null, handler: createApiHandler({ pluginCore: service, agentEngine: 'plugin_core',
+        sse: { pollMs: 5, heartbeatMs: 50 } }) })
+    servers.push(server)
+    const base = `http://127.0.0.1:${server.port}`
+    expect((await create(base, request(runId))).status).toBe(202)
+    await vi.waitFor(async () => expect((await service.getRunView(runIdSchema.parse(runId), token)).phase).toBe('completed'))
+    const response = await fetch(`${base}/api/v3/plugin-core/runs/${runId}`, { headers: { authorization: `Bearer ${token}` } })
+    expect((await response.json()).delivery.construction).toEqual(accepted!.construction)
+    const stream = await fetch(`${base}/api/v3/plugin-core/runs/${runId}/events?after=0`, { headers: { authorization: `Bearer ${token}` } })
+    expect(await stream.text()).toContain(JSON.stringify(accepted!.construction))
+  })
+
   it('forwards validated image bytes ephemerally and binds them to idempotency', async () => {
     const f = await fixture()
     const runId = 'run_00000000-0000-4000-8000-000000000891'

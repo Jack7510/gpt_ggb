@@ -83,7 +83,9 @@ export class PluginCoreRunAdapter {
     let buffer = ''
     try {
       for (;;) {
-        const { done, value } = await reader.read()
+        const { done, value } = await reader.read().catch(() => {
+          throw new RunAdapterError('network', 'event stream disconnected')
+        })
         if (done) return
         buffer += decoder.decode(value, { stream: true })
         const frames = buffer.split('\n\n')
@@ -92,15 +94,18 @@ export class PluginCoreRunAdapter {
           const ready = parsePluginReadyFrame(frame)
           if (ready !== null) {
             await handlers.onReady?.(ready)
+            if (ready.terminal) return
             continue
           }
           const event = parsePluginEventFrame(frame)
           if (event === null) continue
           await handlers.onEvent(event)
           await handlers.onCursor?.(event.eventId)
+          if (['plugin_core.delivery', 'plugin_core.failed', 'plugin_core.cancelled'].includes(event.payload.type)) return
         }
       }
     } finally {
+      await reader.cancel().catch(() => {})
       reader.releaseLock()
     }
   }

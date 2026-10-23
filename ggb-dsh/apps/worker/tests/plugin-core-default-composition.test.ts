@@ -62,6 +62,7 @@ describe('default installed composition', () => {
       expect((await store.getRun(runId))?.phase).toBe('failed') // a check cannot deliver
       expect((await store.getRun(runId))?.deliveryContract).toBe('receipt-v1')
       expect(toolStatus).toMatchObject({ status: 'accepted' })
+      expect((await api.getRunView(runId, 'test-token')).progress).toMatchObject({ tool: 'ggb_check', status: 'accepted' })
       expect(captured?.patches).toEqual([require.resolve('ggb-plugins-dsh/server.patch.yml'), expect.stringContaining('stream-evidence.patch.json'), expect.stringContaining('host-policy.patch.json')])
       expect(captured?.reasoningEffort).toBe('high')
       expect(captured?.env?.GGB_DSH_SDK_VERSION).toBe('0.2.1-rc.2')

@@ -37,7 +37,7 @@ describe('local session isolation (§14.1)', () => {
     expect((await repo.listMessages(session.sessionId))[0]).toMatchObject({ contextKind: 'final_report', sourceEventId: 3 })
   })
 
-  it('names a default session from Intake but preserves a manual title', async () => {
+  it('names a default session from the first input but preserves a manual title', async () => {
     const repo = repository()
     const service = new SessionService({
       repository: repo,

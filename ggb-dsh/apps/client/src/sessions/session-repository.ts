@@ -1,9 +1,12 @@
+import { DEFAULT_SESSION_TITLES } from './session-title.js'
+import type { PluginCoreConstructionRecord } from '@ggb-copilot/application/browser'
 import type { ClientDatabase } from '../persistence/indexeddb.js'
 
 /** §3.2 local conversation session; the browser is the only source of truth. */
 export interface LocalConversationSession {
   sessionId: string
   title: string
+  titleSource?: 'manual' | 'automatic'
   createdAt: string
   updatedAt: string
   activeCanvasVersion: string | null
@@ -38,6 +41,7 @@ export interface LocalPluginDelivery {
   sha256: string
   bytes: number
   ggbOpfsPath: string
+  construction?: PluginCoreConstructionRecord
   verification: unknown
   usage: {
     calls: number
@@ -102,11 +106,20 @@ export class SessionRepository {
     sessionId: string,
     patch: Partial<Omit<LocalConversationSession, 'sessionId'>>,
   ): Promise<LocalConversationSession> {
-    const current = await this.getSession(sessionId)
-    if (current === null) throw new Error('session_not_found')
-    const next: LocalConversationSession = { ...current, ...patch, sessionId }
-    await this.db.put('sessions', next)
+    const next = await this.db.update<LocalConversationSession>('sessions', sessionId,
+      current => current === null ? null : { ...current, ...patch, sessionId })
+    if (next === null) throw new Error('session_not_found')
     return next
+  }
+
+  public async applySuggestedTitle(sessionId: string, title: string, updatedAt: string): Promise<boolean> {
+    let changed = false
+    await this.db.update<LocalConversationSession>('sessions', sessionId, current => {
+      if (current === null || current.titleSource !== undefined || !DEFAULT_SESSION_TITLES.has(current.title)) return current
+      changed = true
+      return { ...current, title, titleSource: 'automatic', updatedAt }
+    })
+    return changed
   }
 
   public async deleteSession(sessionId: string): Promise<void> {

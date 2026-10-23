@@ -3,6 +3,7 @@ import type { PresentationLocale } from '@ggb-copilot/application/browser'
 export type UiTextKey = keyof typeof EN
 
 const EN = {
+  copyRecord: 'Copy record', constructionRecord: 'Construction steps and changes', downloadRecord: 'Download record', constructionDownloadFailed: 'Could not download the record.',
   buildNotAttempted: 'No build attempted', buildStructureRejected: 'Request structure rejected',
   buildExecutionFailed: 'Build execution failed', buildVerificationFailed: 'Verification failed', lastBuild: 'Last build',
   imageReading: 'Reading image…', attachImage: 'Attach image', removeImage: 'Remove image', imageOnlyPrompt: 'Construct the geometry described in this image.',
@@ -32,6 +33,7 @@ const EN = {
 } as const
 
 const ZH: Record<UiTextKey, string> = {
+  copyRecord: '复制记录', constructionRecord: '构造步骤与修改记录', downloadRecord: '下载记录', constructionDownloadFailed: '无法下载构造记录。',
   buildNotAttempted: '未执行构建', buildStructureRejected: '请求结构被拒绝',
   buildExecutionFailed: '构建执行故障', buildVerificationFailed: '核验失败', lastBuild: '最后一次构建',
   imageReading: '正在读取图片…', attachImage: '添加图片', removeImage: '删除图片', imageOnlyPrompt: '请根据图片中的题目完成几何构图。',
