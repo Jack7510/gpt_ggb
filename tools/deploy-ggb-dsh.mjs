@@ -3,7 +3,7 @@ import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { createHash, randomBytes } from 'node:crypto'
 import { createServer } from 'node:net'
-import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
+import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises'
 import { closeSync, openSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -31,6 +31,70 @@ export function options(args, env = process.env) {
     } else throw new Error(`Unknown option: ${arg}`)
   }
   return result
+}
+
+async function loadPinnedPlugin(root, workspace) {
+  const { loadInstalledPlugin } = await import(pathToFileURL(
+    join(workspace, 'apps/worker/lib/plugin-core/installation.js')).href)
+  return loadInstalledPlugin(root, join(workspace, 'vendor/plugin-core.lock.json'))
+}
+
+/** Reuse only a verified installation with a successful provisioning doctor. */
+export async function ensurePinnedInstallation(workspace, root, stage, loadPlugin = loadPinnedPlugin) {
+  const lockPath = join(workspace, 'vendor/plugin-core.lock.json')
+  const original = await readFile(lockPath)
+  const lock = JSON.parse(original)
+  async function complete() {
+    try {
+      const marker = await json(join(root, 'provisioned.json'))
+      for (const key of ['archiveSha256', 'pluginVersion', 'sdkVersion']) {
+        if (marker[key] !== lock[key]) throw new Error('Pinned installation marker does not match the current vendor lock.')
+      }
+      const plugin = await loadPlugin(root, workspace)
+      if (marker.doctor !== 'passed') return false
+      try { await plugin.assertRuntimeReady() } catch { return false }
+      return true
+    } catch (error) {
+      if (['ENOENT', 'MODULE_NOT_FOUND', 'ERR_MODULE_NOT_FOUND'].includes(error.code)) return false
+      throw error
+    }
+  }
+  const unchanged = async () => {
+    if (!(await readFile(lockPath)).equals(original)) throw new Error('Release lock changed concurrently.')
+  }
+  // Complete installations can also live under a read-only installation parent.
+  if (await complete()) {
+    await unchanged()
+    console.log(`[deploy] reusing complete pinned installation: ${root}`)
+    return 'reused'
+  }
+  await mkdir(dirname(root), { recursive: true, mode: 0o700 })
+  const guard = `${root}.provisioning`
+  // Never replace an installation while another launcher is supplying it.
+  await mkdir(guard, { mode: 0o700 }).catch(error => {
+    if (error.code === 'EEXIST') throw new Error(`Plugin provisioning already active (or interrupted); inspect ${guard}`)
+    throw error
+  })
+  try {
+    if (await complete()) {
+      await unchanged()
+      console.log(`[deploy] reusing complete pinned installation: ${root}`)
+      return 'reused'
+    }
+    await unchanged()
+    const info = await lstat(root).catch(error => { if (error.code !== 'ENOENT') throw error })
+    if (info) {
+      if (!info.isDirectory() || info.isSymbolicLink()) throw new Error('Refusing to replace a non-directory pinned installation.')
+      const backup = `${root}.incomplete-${randomBytes(8).toString('hex')}`
+      await rename(root, backup)
+      console.log(`[deploy] preserved incomplete installation: ${backup}`)
+    }
+    await stage('04a-provision-plugin-core', workspace, process.execPath,
+      ['tools/provision-plugin-core.mjs', '--target', root])
+    await unchanged()
+    if (!await complete()) throw new Error('Plugin provisioning did not produce a complete installation with doctor passed.')
+    return 'provisioned'
+  } finally { await rm(guard, { recursive: true, force: true }) }
 }
 
 /** Derive a private development lock and verify it using the real host loader. */
@@ -234,7 +298,9 @@ Local development only. No release publishing, production deployment or model ta
   --pinned-root PATH  Complete installation matching the current vendor lock
   --help           Show this help
 REPO defaults to the script's repository. Default UI: http://localhost:5173
-Requires Node/pnpm/lsof, installed dependencies and a fully provisioned pinned runtime.
+Requires Node/pnpm/lsof, installed dependencies and the Client GeoGebra runtime.
+Missing/incomplete pinned plugin runtime is supplied automatically, including browser doctor.
+Complete verified installations are reused; --doctor additionally checks the source overlay.
 Before building, stops TCP listeners on 8081 and 5173 (bundle: only 8081).
 Sends SIGTERM, waits up to 5s, then SIGKILL if needed. --build-only skips cleanup.
 Logs: $REPO/output/deploy-ggb-dsh/<unique-run>/. Ctrl-C stops all owned processes.
@@ -253,9 +319,6 @@ Enter Provider Key only in page Settings. This script never reads .env or starts
     throw new Error('Missing Client GeoGebra runtime; run pnpm run provision:geogebra in ggb-dsh first.')
   })
   const pinned = config.pinnedRoot ?? join(workspace, '.plugin-core-runtime', lock.archiveSha256)
-  await readFile(join(pinned, 'provisioned.json')).catch(() => {
-    throw new Error('Missing pinned installation; run pnpm run provision:plugin-core in ggb-dsh first.')
-  })
   const parent = join(config.repo, 'output/deploy-ggb-dsh')
   await mkdir(parent, { recursive: true, mode: 0o700 })
   const output = await mkdtemp(join(parent, 'run-'))
@@ -306,6 +369,7 @@ Enter Provider Key only in page Settings. This script never reads .env or starts
     }
     await stage('03-build-plugin', source, 'pnpm', ['build'])
     await stage('04-build-backend', workspace, 'pnpm', ['exec', 'tsc', '-b', 'apps/api', 'apps/worker'])
+    await ensurePinnedInstallation(workspace, pinned, stage)
     await stage('05-build-client', workspace, 'pnpm', ['exec', 'tsc', '-b', 'apps/client'])
     if (config.bundle) await stage('06-bundle', workspace, 'pnpm', ['--filter', '@ggb-copilot/client', 'run', 'bundle'])
     const overlay = await prepareOverlay(workspace, source, pinned, output)

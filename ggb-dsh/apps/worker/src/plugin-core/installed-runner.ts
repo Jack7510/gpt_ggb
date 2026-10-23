@@ -183,10 +183,11 @@ export class InstalledPluginCoreRunner {
     if (base && digest(await readFile(base.path)) !== base.sha256) throw new Error('plugin_core_base_changed')
     signal?.throwIfAborted()
     const ggb = bytes.get('result_ggb')!
+    const construction = createConstructionRecord(request, binding, report)
     return channelPluginCoreDeliverySchema.parse({ id: digest(ggb), ggbBase64: ggb.toString('base64'), ggbBytes: ggb.length,
       screenshotBase64: bytes.get('preview')?.toString('base64') ?? null,
       verification: receipt.verification.summary, trustedBuild,
-      construction: createConstructionRecord(request, binding),
+      ...(construction === null ? {} : { construction }),
       reportBase64: bytes.get('verification')!.toString('base64'),
       manifestBase64: bytes.get('manifest')!.toString('base64') })
   }

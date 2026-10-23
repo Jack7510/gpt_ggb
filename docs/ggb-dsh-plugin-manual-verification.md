@@ -16,7 +16,7 @@
 
 1. Node.js 和 pnpm 满足 [`runtime-versions.json`](../ggb-dsh/config/runtime-versions.json) 的范围。
 2. `ggb-plugins` 和 `ggb-dsh` 已安装依赖。
-3. `.plugin-core-runtime/<archiveSha256>` 存在。不存在时，先执行 `pnpm run provision:plugin-core`。
+3. 使用下文一键启动器时，缺少的插件 runtime 会自动供应。使用分步命令时，先执行 `pnpm run provision:plugin-core`。
 4. 8081 端口空闲。Vite 代理固定指向 `http://127.0.0.1:8081`。
 5. 5173 端口空闲；如果 Vite 使用其他端口，后续必须同步 `GGB_V3_ALLOWED_ORIGIN`。
 6. DeepSeek API Key 只在页面 Settings 中输入。不要把 Key 写入 shell、文档或 Git。
@@ -92,7 +92,13 @@ sh tools/deploy-ggb-dsh.sh --build-only   # 只构建和校验独立安装，不
 ```
 
 首次安装依赖时加 `--install`。`--doctor` 会额外启动本机 GeoGebra/浏览器，须按任务授权使用。
-脚本要求固定插件安装和 Client GeoGebra runtime 已供应；缺失时给出对应 provision 命令，不自动下载。
+脚本检查当前 vendor 锁对应的固定安装：供应标记必须记录 doctor 通过，包摘要、兼容组合和 runtime 资源检查必须通过。
+完整安装直接复用。缺少安装、供应标记、runtime 资源或 doctor 成功记录时，脚本调用现有供应器自动安装依赖、Chromium 和 GeoGebra runtime，并运行 doctor；该步骤可能下载资源、启动本机浏览器。
+自动供应同样适用于 `--build-only`。`--doctor` 额外核验源码覆盖后的安装。
+不完整目录会先保留为同级 `.incomplete-<随机值>` 目录，再供应原目标；脚本不删除备份。
+包摘要或安装身份不匹配时停止，不覆盖现有安装。供应或 doctor 失败时停止，不启动服务；分阶段日志保留在下述日志目录。
+并发供应由同级 `.provisioning` 目录互斥；强制结束后，确认没有供应进程再手工移除该目录并重试。
+Client GeoGebra runtime 仍需预先供应；缺失时提示执行 `pnpm run provision:geogebra`。
 启动模式会在构建前清理所需端口的 TCP 监听进程：默认清理 8081 和 5173，`--bundle` 只清理 8081。
 脚本通过 `lsof` 取得 PID，先发送 SIGTERM，等待最多 5 秒；仍占用时发送 SIGKILL，并确认端口可用。
 清理期间若出现新的监听 PID，脚本退出，不继续终止新进程。`--build-only` 不执行端口清理。
@@ -278,7 +284,7 @@ curl -fsS http://127.0.0.1:8081/api/v3/health/ready
 
 | 现象 | 原因 | 处理 |
 | --- | --- | --- |
-| `missing pinned install` | `.plugin-core-runtime/<archiveSha256>` 不存在 | 在 `ggb-dsh` 执行 `pnpm run provision:plugin-core` |
+| `04a-provision-plugin-core failed` | 自动供应或 doctor 失败 | 检查启动器打印的阶段日志；修复下载、依赖或浏览器问题后重新运行启动器 |
 | `plugin_core_package_integrity_mismatch` | 使用了未匹配的安装根 | 不要直接把 `GGB_PLUGIN_ROOT` 指向源码目录；执行 `tools/manual-verify-plugin.sh` |
 | 启动器被强制终止，锁文件仍被修改 | 进程被强制终止，清理未执行 | 在 `ggb-dsh` 执行 `git checkout -- vendor/plugin-core.lock.json` |
 | 健康检查超时 | API 或 Worker 启动失败 | 读取启动器输出和 `.local` 日志；检查 8081 端口、插件依赖和 runtime |

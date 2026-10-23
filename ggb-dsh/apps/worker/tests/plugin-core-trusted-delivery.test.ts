@@ -116,7 +116,9 @@ describe.skipIf(!root)('installed receipt and trusted delivery (synthetic facts,
 
   it('accepts kind-based names and preserves exact checked bytes through Service', async () => {
     const f = await fixture()
-    const dsh = { run: async () => { await f.call(); return { finalResponse: 'done', events: [{ type: 'turn/end', data: { reason: { kind: 'completed' } } }] } } } as unknown as PluginCoreDshRunner
+    const request = structuredClone(synthetic.request)
+    request.plan.program = [{ id: 'P', op: 'native', mode: 'algebra', source: 'P=(0,0)', initial: [0,0] }]
+    const dsh = { run: async () => { await f.call(request); return { finalResponse: 'done', events: [{ type: 'turn/end', data: { reason: { kind: 'completed' } } }] } } } as unknown as PluginCoreDshRunner
     const result = await new PluginCoreService(dsh, { outputRoot: f.dir, state: f.state })
       .run({ runId, deliveryContract: 'receipt-v1', providerKey: 'fake', prompt: 'test' })
     expect(result.error).toBeNull()
@@ -126,7 +128,7 @@ describe.skipIf(!root)('installed receipt and trusted delivery (synthetic facts,
     expect(result.delivery?.trustedBuild?.binding.runId).toBe(runId)
     expect(result.delivery?.construction).toMatchObject({ origin: 'host-accepted-build',
       buildId: result.delivery!.trustedBuild!.binding.buildId, domainRequestDigest: result.delivery!.trustedBuild!.binding.domainRequestDigest })
-    expect(result.delivery?.construction?.text).toContain('\"op\":\"freePoint\"')
+    expect(result.delivery?.construction?.text).toBe('P=(0,0)')
     expect(result.delivery?.construction?.text).not.toContain('requirements')
     expect(result.delivery?.trustedBuild?.receiptSha256).toMatch(/^[a-f0-9]{64}$/)
     expect(f.state.candidate(runId)).toBeNull() // resources released after projection
