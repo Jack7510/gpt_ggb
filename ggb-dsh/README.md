@@ -72,6 +72,7 @@ Agent 的修改、验证与安全工作规则见 [AGENTS.md](../AGENTS.md)。
 | `pnpm run verify:plugin-core:pwa:mock --authorized` | mock Harness + 真实 PWA/GeoGebra 全链；需完整 runtime，不调用 Provider |
 | `pnpm run verify:plugin-core-ui` | 真实浏览器 PWA 端到端（需 Playwright 与授权） |
 | `pnpm run provision:plugin-core` | 从 vendor TGZ 供应插件运行时 |
+| `pnpm run verify:runtime-release` | 固定官方 ZIP、空默认安装 doctor、真实 Client runtime 与旧 Service Worker 升级；需浏览器授权，归档与证据参数见 [兼容契约](docs/dsh-sdk-compatibility.md#引擎补丁的供应与启动准入) |
 | `pnpm run verify:plugin-core:runtime` | 真实 GeoGebra、可信回执与进程树取消；使用 mock Harness，需浏览器执行授权；参数见 [兼容契约](docs/dsh-sdk-compatibility.md#真实-runtime-验收无-provider) |
 
 真实 Provider/GeoGebra 命令在离线检查通过并获明确授权后单独执行；结果写入 `output/`，

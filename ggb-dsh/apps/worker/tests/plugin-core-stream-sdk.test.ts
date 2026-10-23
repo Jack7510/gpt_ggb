@@ -101,11 +101,11 @@ describe('wire diagnostics across a real SDK Server', () => {
         expect(tool.input_schema).toEqual(createTool(tool.name).parameters)
         expect(tool.strict).toBeUndefined() // Messages adapter does not promise strict mode.
       }
-      expect(body.system).toContain('Never resend the complete request')
+      expect(body.system).toContain('Use ggb_request once with one complete `requestText` JSON object.')
       const stream = JSON.parse(await readFile(join(root, runId, 'diagnostics', `${turnId}.stream.json`), 'utf8'))
       const request = stream.requests[0]
       expect(request.providerRequest).toMatchObject({ thinking: 'enabled', effort: 'high' })
-      expect(request.providerRequest.jsonExamples).toContainEqual(expect.objectContaining({ validJson: true, rootKeys: ['action', 'locale'] }))
+      expect(request.providerRequest.jsonExamples).toContainEqual(expect.objectContaining({ validJson: true, rootKeys: ['requestText', 'locale'] }))
       expect(request.sdkRequest.tools).toHaveLength(4)
       expect(request.providerRequest.tools).toHaveLength(4)
       for (const tool of request.sdkRequest.tools) expect(request.providerRequest.tools)

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RunError } from '@ggb-copilot/application'
@@ -10,6 +11,12 @@ const RUNTIME = {
   version: '5.4.929.3',
   source: 'https://download.geogebra.org/installers/5.4/geogebra-math-apps-bundle-5-4-929-3.zip',
   sha256: 'a'.repeat(64),
+  compatibility: {
+    patchId: 'directrix-path-origin-v1', sourceVersion: '5.4.929.3',
+    asset: 'HTML5/5.0/web3d/deferredjs/38DDB4543208AF14503E6553B520534C/6.cache.js',
+    originalSha256: 'b'.repeat(64),
+    patchedSha256: createHash('sha256').update('// patched\n').digest('hex'),
+  },
 }
 
 const root = mkdtempSync(join(tmpdir(), 'ggb-static-'))
@@ -27,6 +34,7 @@ function runtimeManifest(overrides: Record<string, unknown> = {}): void {
     version: RUNTIME.version,
     source: RUNTIME.source,
     archiveSha256: RUNTIME.sha256,
+    compatibility: RUNTIME.compatibility,
     ...overrides,
   }))
 }
@@ -43,6 +51,7 @@ write(join(dist, 'assets', 'app-abc123.js'), 'export const ok = true\n')
 write(join(dist, 'manifest.webmanifest'), '{"name":"ggb"}')
 write(join(dist, 'geogebra', 'deployggb.js'), 'window.GGB = true\n')
 write(join(dist, 'geogebra', 'HTML5', '5.0', 'web3d', 'web3d.nocache.js'), '// web3d\n')
+write(join(dist, 'geogebra', RUNTIME.compatibility.asset), '// patched\n')
 write(outside, 'do-not-serve')
 runtimeManifest()
 
@@ -135,6 +144,39 @@ describe('static assets', () => {
 })
 
 describe('static asset boot validation', () => {
+  for (const compatibility of [undefined, { ...RUNTIME.compatibility, patchedSha256: 'a'.repeat(64) },
+    { ...RUNTIME.compatibility, sourceVersion: 'other' }, { ...RUNTIME.compatibility, asset: '../outside' }]) {
+    it('rejects missing or forged patch audit metadata', () => {
+      runtimeManifest({ compatibility })
+      expect(() => createStaticAssets({ clientDistDir: dist, geogebraRoot: null,
+        runtimeVersionsPath: writeRuntimeVersions() })).toThrow('geogebra_runtime_compatibility_mismatch')
+      runtimeManifest()
+    })
+  }
+
+  it('rejects original or partial engine bytes despite a valid manifest', () => {
+    for (const content of ['// original\n', 'partial']) {
+      write(join(dist, 'geogebra', RUNTIME.compatibility.asset), content)
+      expect(() => createStaticAssets({ clientDistDir: dist, geogebraRoot: null,
+        runtimeVersionsPath: writeRuntimeVersions() })).toThrow('geogebra_runtime_asset_digest_mismatch')
+    }
+    write(join(dist, 'geogebra', RUNTIME.compatibility.asset), '// patched\n')
+  })
+
+  it('rejects an engine directory escaping the root even when its bytes match', () => {
+    const directory = join(dist, 'geogebra', RUNTIME.compatibility.asset, '..')
+    const escaped = join(root, 'escaped-engine')
+    renameSync(directory, escaped)
+    symlinkSync(escaped, directory, 'dir')
+    try {
+      expect(() => createStaticAssets({ clientDistDir: dist, geogebraRoot: null,
+        runtimeVersionsPath: writeRuntimeVersions() })).toThrow('geogebra_runtime_compatibility_asset_invalid')
+    } finally {
+      rmSync(directory)
+      renameSync(escaped, directory)
+    }
+  })
+
   it('rejects a runtime whose manifest does not match the pinned release', () => {
     runtimeManifest({ archiveSha256: 'b'.repeat(64) })
     expect(() => createStaticAssets({

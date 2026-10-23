@@ -25,12 +25,12 @@
 | SDK Client / runtime / tools | `0.2.1-rc.2`；Worker、application 和 workspace overrides 一致 |
 | Cordis / group / pi-ai | `4.0.5` / `1.0.5` / `1.3.0`；完整传递依赖由 workspace lock 固定 |
 | 插件 | `ggb-plugins-dsh@0.8.3`；来自本地修改源码的 development-build，尚未发布 |
-| 发行包 SHA-256 | `6fceb090576d5f9c8e92dad08afe42c8f6632213281a0552610c42fc54fbf043` |
-| Worker Skill SHA-256 | `38a811fcbb33d46f39554262a63eda64c87b261d76286237189f8565ac473d64` |
+| 发行包 SHA-256 | `bf893c09090bfa4391378746530a0f74f96383b9deb067a8a3181365cc96580b` |
+| Worker Skill SHA-256 | `3b1142c087949e52f61fed562defb0feb42abdc7e8299319037fffbb7ad33afa` |
 | 工具 / executor / receipt / API↔Worker | 协议 `3` / envelope `3` / schema `2` / channel `8`；桌面 CLI 保持 envelope `1` |
 | 插件 GeoGebra | `5.4.932.1`；归档 SHA-256 见 vendor lock |
 | Playwright | `1.64.1`；执行器选择该包管理的 Chromium，不依赖系统 Chrome |
-| Client applet | `5.4.929.3`，独立于插件 runtime；没有随本次切换升级 |
+| Client applet | `5.4.932.1`；与插件统一官方归档，分别供应和校验 |
 | 数据库 | 017 + 018；新 run 固定 `receipt-v1`，历史行保留 `legacy` |
 | 实际离线环境 | Node `26.5.1`、pnpm `11.7.0`、macOS POSIX；不代表其他平台已验收 |
 
@@ -39,7 +39,7 @@ Worker 在导入代码前核对发行文件摘要，再通过公开 `installatio
 缺少安装包、包被改动或 SDK 组合不匹配时拒绝启动。`GGB_DSH_SDK_VERSION` 来自已核对的实际 SDK 包。
 
 公开入口：`ggb-plugins-dsh/server`、`server.patch.yml`、`installation`、`schemas`、`cli`、
-`executor`、`delivery-contract`、`drafts`。四工具和 Worker Skill 的领域定义由插件拥有；宿主只拥有准入、
+`executor`、`delivery-contract`、`drafts`、`runtime-compatibility`。四工具和 Worker Skill 的领域定义由插件拥有；宿主只拥有准入、
 证据、进程监督、产物接收与原子提交。Client 不依赖 DSH SDK。
 
 ## 安装与启动
@@ -75,6 +75,44 @@ node tools/verify-installed-plugin-sdk.mjs \
 SDK 子进程不继承凭据，测试 preload 拒绝 HTTP、fetch 和 socket 网络连接；关闭后再次核对尝试记录。
 两个隔离 Harness 必须发现准确四工具和完整 Worker Skill，删除首个 home 后第二个仍能加载。
 证据写入忽略目录 `result.json`。初始化通过不代表真实构图或浏览器清理通过。
+
+## 引擎补丁的供应与启动准入
+
+`runtime-compatibility` 公开入口返回 `patchId`、`sourceVersion`、`asset`、
+`originalSha256` 和 `patchedSha256`。vendor lock 固定插件配方；runtime 配置固定 Client 配方。
+供应 manifest 记录同样的审计身份。只有精确原始 asset 能应用补丁；已经修复的 asset 可幂等复用。
+未知版本、不同字节或不同补丁结果均拒绝，不回退到原始引擎。
+
+补丁 asset 和 manifest 均以同目录临时文件写入，先同步并关闭文件，再原子 rename。
+POSIX 还同步父目录。写入、文件同步或 rename 失败不以部分内容替换旧文件。
+manifest 更新失败后，旧 manifest 与已完整修复的 asset 可以重新供应；两文件之间不承诺跨文件原子事务。
+API 提供 Client 静态资源时，在监听前比较固定配方、manifest 全部审计字段和实际 asset SHA-256，
+拒绝原始、截断或符号链接逃逸的 asset。单纯修改 manifest 不能绕过准入。
+
+默认供应使用 `.plugin-core-runtime/<archiveSha256>` 的公开模块，并核对兼容模块及原子写入模块摘要。
+`--plugin-root` 只用于显式开发安装，验收不使用 overlay。离线真实归档供应：
+
+```bash
+pnpm run provision:plugin-core --offline --runtime-archive /absolute/geogebra-5.4.932.1.zip
+pnpm run provision:geogebra --runtime-archive /absolute/geogebra-5.4.932.1.zip
+pnpm run typecheck
+pnpm --filter @ggb-copilot/client run bundle
+GGB_RUNTIME_ARCHIVES=/absolute/archives GGB_RUNTIME_EVIDENCE=/absolute/evidence pnpm run verify:runtime-release
+```
+
+归档目录中的文件名必须是 `geogebra-5.4.932.1.zip`。两条供应命令仍检查官方 ZIP 摘要。
+升级旧 Client 时先归档旧 public runtime 和 manifest，或在新 checkout 供应；供应器不覆盖版本冲突目录。
+PWA 缓存升级到 `ggb-runtime-v3`，激活时删除 v1 和 v2，首次获取 runtime 绕过旧 HTTP cache。
+验收使用实际 API 静态层、Client applet 文档和构建后的 Service Worker；先激活旧 v1 Worker，
+验证原始引擎失效，再升级并验证缓存字节、依赖、样式、鼠标拖动、缩放和 GGB 重载。
+
+宿主 CI 的 `runtime-release` job 从空默认安装开始，验证正式 vendor TGZ、doctor、真实官方 ZIP、
+Client 供应和浏览器升级；证据通过 artifact 保存。插件 CI 另执行原始/修复引擎及其他圆锥曲线对照。
+普通 `pnpm test` 包含模拟供应反例，不下载资源或调用真实 Provider。上述真实验收需浏览器授权。
+
+本地同步新的 development-build 时，先在插件仓库执行 `pnpm pack:dsh`，再在宿主运行
+`node tools/update-plugin-core.mjs --tgz /absolute/package.tgz --source /absolute/plugin-checkout`。
+此命令同步 TGZ、文件摘要、源码快照、审计配方和 runtime 组合，不发布 npm 包或部署生产。
 
 ## Provider 与升级边界
 
@@ -261,7 +299,7 @@ PG 参数只用于专用一次性本机数据库，不读取 DATABASE_URL；测�
 在已获得真实 GeoGebra/浏览器执行授权后，于 `ggb-dsh/` 运行：
 
 ```bash
-GGB_PLUGIN_TEST_ROOT="$PWD/.plugin-core-runtime/6fceb090576d5f9c8e92dad08afe42c8f6632213281a0552610c42fc54fbf043" \
+GGB_PLUGIN_TEST_ROOT="$PWD/.plugin-core-runtime/bf893c09090bfa4391378746530a0f74f96383b9deb067a8a3181365cc96580b" \
 GGB_E_OUTPUT_ROOT="$PWD/../output/installed-plugin-e/recheck-$(date +%s)" \
   pnpm run verify:plugin-core:runtime
 ```

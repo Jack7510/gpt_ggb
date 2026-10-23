@@ -30,3 +30,60 @@ jobs:
         run: pnpm run check
         env:
           GGB_PLUGIN_REAL_RUNTIME: "0"
+
+  runtime-release:
+    runs-on: macos-14
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: ggb-dsh
+    env:
+      GGB_RUNTIME_ARCHIVES: ${{ github.workspace }}/output/runtime-archives
+      GGB_RUNTIME_EVIDENCE: ${{ github.workspace }}/output/runtime-release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.20.0"
+          cache: pnpm
+          cache-dependency-path: ggb-dsh/pnpm-lock.yaml
+      - uses: actions/cache@v4
+        with:
+          path: output/runtime-archives
+          key: geogebra-c139f3edb51c004e
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Acquire and authenticate both fixed official archives
+        run: |
+          node --input-type=module <<'JS'
+          import {readFile,mkdir} from 'node:fs/promises';
+          import {createHash} from 'node:crypto';
+          import {execFileSync} from 'node:child_process';
+          import {join} from 'node:path';
+          const config=JSON.parse(await readFile('config/runtime-versions.json','utf8'));
+          await mkdir(process.env.GGB_RUNTIME_ARCHIVES,{recursive:true});
+          for(const item of new Map([config.geogebra,config.plugin.geogebra].map(item=>[item.version,item])).values()) {
+            const path=join(process.env.GGB_RUNTIME_ARCHIVES,`geogebra-${item.version}.zip`);
+            try {await readFile(path);} catch(error) {
+              if(error.code!=='ENOENT') throw error;
+              execFileSync('curl',['--fail','--location','--retry','2','--max-time','180',item.source??item.url,'-o',path],{stdio:'inherit'});
+            }
+            if(createHash('sha256').update(await readFile(path)).digest('hex')!==item.sha256) throw new Error('Official archive digest mismatch');
+          }
+          JS
+      - run: pnpm run typecheck
+      - name: Empty default installation, real doctor and default Client provisioning
+        run: |
+          node -e 'const {existsSync}=require("node:fs"); const lock=require("./vendor/plugin-core.lock.json"); if(existsSync(".plugin-core-runtime/"+lock.archiveSha256)) throw new Error("Expected empty default installation");'
+          pnpm run provision:plugin-core --runtime-archive "$GGB_RUNTIME_ARCHIVES/geogebra-5.4.932.1.zip"
+          pnpm run provision:geogebra --runtime-archive "$GGB_RUNTIME_ARCHIVES/geogebra-5.4.932.1.zip"
+          pnpm --filter @ggb-copilot/client run bundle
+      - name: Official archive, actual Client engine and active old Worker upgrade
+        run: pnpm run verify:runtime-release
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: runtime-release-evidence
+          path: output/runtime-release

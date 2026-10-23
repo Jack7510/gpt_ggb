@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-23",
+  "updatedAt": "2026-10-24",
   "node": {
     "supportedRange": "^22.19.0 || >=24.0.0",
     "role": "API/Worker and DSH runtime",
@@ -16,19 +16,33 @@
     "cordisVersion": "4.0.5"
   },
   "geogebra": {
-    "version": "5.4.929.3",
+    "version": "5.4.932.1",
     "role": "self-hosted Math Apps applet release candidate",
-    "source": "https://download.geogebra.org/installers/5.4/geogebra-math-apps-bundle-5-4-929-3.zip",
-    "sha256": "8855e7577fb766108e3feed1991c42649b691ef4a4d88c2ddb431b893d58811e"
+    "source": "https://download.geogebra.org/installers/5.4/geogebra-math-apps-bundle-5-4-932-1.zip",
+    "sha256": "c139f3edb51c004ec67d83226a1f1215486f8559ad98ee37e9e775aac278e96e",
+    "compatibility": {
+      "patchId": "directrix-path-origin-v1",
+      "sourceVersion": "5.4.932.1",
+      "asset": "HTML5/5.0/web3d/deferredjs/A235CC712983FA478D93F2A05A5A8D23/6.cache.js",
+      "originalSha256": "a8d4d8ca7b456c777ae015fa333b737001910650fb5ab9978c6875818d80e743",
+      "patchedSha256": "73e64f70be068aab9733e95ceef6515472792b3ac07a4b18978fc7e44ac8e702"
+    }
   },
   "plugin": {
     "pluginVersion": "0.8.3",
-    "archiveSha256": "6fceb090576d5f9c8e92dad08afe42c8f6632213281a0552610c42fc54fbf043",
+    "archiveSha256": "bf893c09090bfa4391378746530a0f74f96383b9deb067a8a3181365cc96580b",
     "playwright": "1.64.1",
     "geogebra": {
       "version": "5.4.932.1",
       "sha256": "c139f3edb51c004ec67d83226a1f1215486f8559ad98ee37e9e775aac278e96e",
-      "url": "https://download.geogebra.org/installers/5.4/geogebra-math-apps-bundle-5-4-932-1.zip"
+      "url": "https://download.geogebra.org/installers/5.4/geogebra-math-apps-bundle-5-4-932-1.zip",
+      "compatibility": {
+        "patchId": "directrix-path-origin-v1",
+        "sourceVersion": "5.4.932.1",
+        "asset": "HTML5/5.0/web3d/deferredjs/A235CC712983FA478D93F2A05A5A8D23/6.cache.js",
+        "originalSha256": "a8d4d8ca7b456c777ae015fa333b737001910650fb5ab9978c6875818d80e743",
+        "patchedSha256": "73e64f70be068aab9733e95ceef6515472792b3ac07a4b18978fc7e44ac8e702"
+      }
     },
     "hostProtocolVersion": 3,
     "receiptSchemaVersion": 2,

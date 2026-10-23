@@ -41,7 +41,7 @@ ggb-dsh-server container (non-root)
    `server-pepper`、`worker-secret`。内容必须是 64 位小写十六进制。
 5. 在一个可审计的 release checkout 中构建统一的 `ggb-dsh/` workspace。内部包使用本地链接，
    外部依赖由 `pnpm-lock.yaml` 固定。镜像必须使用同一 Git revision 的应用、共享领域包和 lockfile。
-6. 确认 GeoGebra 5.4.929.3 的同源分发许可适用于目标部署；商业用途须先完成独立许可审查。
+6. 确认固定 GeoGebra 版本的同源分发许可适用于目标部署；商业用途须先完成独立许可审查。
 7. 供应 plugin-core runtime 与固定 GeoGebra runtime；缺资源时 Worker 在监听前失败。
 
 生产环境不需要、也不得配置 DeepSeek 平台 API Key。它由最终用户在浏览器中保存，并仅按 run 通过
@@ -58,7 +58,7 @@ docker build -f ggb-dsh/deploy/container/Dockerfile \
 ```
 
 `provision:geogebra` 会写入受 Git 忽略的固定 runtime 与 manifest；API 会在启动前核验 manifest、
-版本和必要文件。`provision:plugin-core` 从 vendored TGZ 供应插件依赖、Chromium 和固定 GeoGebra
+版本、必要文件、固定补丁审计字段与实际 asset SHA-256。不匹配时拒绝监听。`provision:plugin-core` 从 vendored TGZ 供应插件依赖、Chromium 和固定 GeoGebra
 runtime，并运行插件 `doctor`。两者都必须在 Docker build 前完成。
 
 运行镜像包含固定插件安装根、`vendor/plugin-core.lock.json`、`knowledge/` 与 `tools/`。

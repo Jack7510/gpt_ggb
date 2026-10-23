@@ -1,6 +1,6 @@
 # GGB DSH 统一 Backlog
 
-更新：2026-10-23。当前引擎为 plugin-core；Native 九阶段已删除，删除前代码保存在标签
+更新：2026-10-24。当前引擎为 plugin-core；Native 九阶段已删除，删除前代码保存在标签
 `archive/native-nine-stage-pre-plugin-core`。本文只维护未完成工作、根因、依赖与退出条件；
 设计取舍见 [采用方案](ggb-dsh-plugin-core-adoption.md)，已验证证据见
 [切换交接](ggb-dsh-plugin-core-cutover-handoff.md)。
@@ -27,6 +27,21 @@
 | IP-E | P1 | 待验证 | 安装插件真实 Provider 与部署验收 | 本机完整供应、doctor、真实构图/取消及 mock Harness 的 PWA 全链已通过；一次真实 PWA 画圆已通过；两轮正多边形失败已定位到 Provider 非法 JSON，当前包一次真实正多边形交付通过；生产环境未验收 | 分别授权后完成复杂题回归、目标环境发布与部署层回收验收 |
 
 ## 2. 已完成（不再作为当前工作）
+
+- 引擎兼容补丁供应与客户端验收（2026-10-24）：asset 与审计 manifest 改为原子写入，
+  记录 patchId、sourceVersion、原始及修复后摘要。API 静态资源启动准入校验固定配方、manifest 和实际字节；
+  Worker 校验安装包公开配方与 vendor lock。字段篡改、截断字节、符号链接逃逸均拒绝。
+  按用户确认将 Client 与插件统一为 5.4.932.1，正式 vendor TGZ 及兼容组合已同步；
+  新摘要默认安装根由空目录完成供应，真实 doctor（含 CAS 和路径点）通过，不使用源码 overlay。
+  官方 ZIP 验证只修改目标 asset，覆盖重复供应、过期审计恢复和错误归档拒绝。
+  真实 API + Client + Playwright 验证旧 v1 Worker 激活、v1/v2 缓存清理、v3 缓存真实补丁摘要，
+  构造样式、GGB 重载、鼠标拖动、父参数变化、滚轮缩放及再次重载均保持依赖。
+  插件完整测试 176 项及原子/执行故障回归 12 项通过；真实引擎对照 12 项通过。
+  宿主完整 check 通过（692 项通过、5 项默认跳过），补充准入反例后定向 25 项通过；
+  官方供应/doctor/Client 升级验收 4 项通过。CI 已接入真实 runtime job，但未在远程 CI 执行。
+  证据保存在 output/runtime-release-20261024/；契约和命令见
+  [引擎补丁供应](../ggb-dsh/docs/dsh-sdk-compatibility.md#引擎补丁的供应与启动准入)。
+  未调用真实 Provider、未部署生产；Linux CI 和目标部署仍不属于本机验收。
 
 - Malformed response 安全重试（2026-10-23）：`MALFORMED_RESPONSE` 且无 `ggb_build`、证据未截断时重跑一次模型 turn；
   `hasBuildCall` 取代任意 tool call 保护，只读 inspect/check 可重复；新增 `plugin_core_malformed_response` 错误码。

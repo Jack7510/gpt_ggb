@@ -1,11 +1,20 @@
-import { createReadStream, existsSync, lstatSync, readFileSync } from 'node:fs'
+import { createReadStream, existsSync, lstatSync, readFileSync, realpathSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { dirname, extname, join, relative, resolve, sep } from 'node:path'
 import { RunError } from '@ggb-copilot/application'
 import type { HttpContext } from './http-server.js'
 
 /** Pinned release metadata the provisioned GeoGebra runtime must match (§11). */
 interface RuntimeConfiguration {
-  readonly geogebra: { readonly version: string; readonly source: string; readonly sha256: string }
+  readonly geogebra: { readonly version: string; readonly source: string; readonly sha256: string; readonly compatibility: RuntimeCompatibility }
+}
+
+interface RuntimeCompatibility {
+  readonly patchId: string
+  readonly sourceVersion: string
+  readonly asset: string
+  readonly originalSha256: string
+  readonly patchedSha256: string
 }
 
 /** Marker written by `tools/provision-geogebra.mjs` next to the provisioned runtime. */
@@ -14,6 +23,7 @@ interface RuntimeManifest {
   readonly version: string
   readonly source: string
   readonly archiveSha256: string
+  readonly compatibility: RuntimeCompatibility
 }
 
 export interface StaticAssetsConfig {
@@ -108,7 +118,29 @@ export function resolveGeoGebraRuntime(geogebraRoot: string, runtimeVersionsPath
     const path = join(geogebraRoot, required)
     if (!isPlainFile(path)) throw new Error('geogebra_runtime_incomplete')
   }
+  verifyRuntimeCompatibility(geogebraRoot, configuration.geogebra.compatibility, manifest.compatibility, manifest.version)
   return geogebraRoot
+}
+
+/** Audit metadata is pinned configuration, not authority granted by the manifest. */
+function verifyRuntimeCompatibility(root: string, expected: RuntimeCompatibility | undefined,
+  actual: RuntimeCompatibility | undefined, version: string): void {
+  const fields = ['patchId', 'sourceVersion', 'asset', 'originalSha256', 'patchedSha256'] as const
+  if (!expected || !actual || fields.some(field => typeof expected[field] !== 'string'
+    || expected[field].length === 0 || actual[field] !== expected[field])
+    || expected.sourceVersion !== version
+    || !/^[a-f0-9]{64}$/.test(expected.originalSha256)
+    || !/^[a-f0-9]{64}$/.test(expected.patchedSha256)
+    || !/^HTML5\/5\.0\/web3d\/deferredjs\/[A-F0-9]+\/6\.cache\.js$/.test(expected.asset)) {
+    throw new Error('geogebra_runtime_compatibility_mismatch')
+  }
+  const file = resolveAssetFile(root, expected.asset)
+  if (file === null || !realpathSync(file).startsWith(realpathSync(root) + sep)) {
+    throw new Error('geogebra_runtime_compatibility_asset_invalid')
+  }
+  if (createHash('sha256').update(readFileSync(file)).digest('hex') !== expected.patchedSha256) {
+    throw new Error('geogebra_runtime_asset_digest_mismatch')
+  }
 }
 
 /** Resolves the static roots once at boot; `null` means the API serves only its own routes. */

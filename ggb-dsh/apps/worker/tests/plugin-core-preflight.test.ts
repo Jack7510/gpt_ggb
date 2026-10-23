@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cp, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import { installedRoot } from './fixtures/installed-plugin.js'
@@ -28,6 +28,18 @@ describe('installed release admission', () => {
       await expect(loadInstalledPlugin(installedRoot, path)).rejects.toThrow('plugin_core_release_lock_invalid')
     } finally { await rm(temp, { recursive: true, force: true }) }
   })
+  it.each(['missing', 'patchId', 'sourceVersion', 'asset', 'originalSha256', 'patchedSha256'])(
+    'rejects a changed runtime audit identity: %s', async field => {
+      const temp = await mkdtemp(join(tmpdir(), 'plugin-audit-lock-'))
+      try {
+        const release = JSON.parse(await readFile(lock, 'utf8'))
+        if (field === 'missing') delete release.geogebra.compatibility
+        else release.geogebra.compatibility[field] = 'changed'
+        const path = join(temp, 'lock.json')
+        await writeFile(path, JSON.stringify(release))
+        await expect(loadInstalledPlugin(installedRoot, path)).rejects.toThrow('plugin_core_runtime_compatibility_mismatch')
+      } finally { await rm(temp, { recursive: true, force: true }) }
+    })
   it('refuses an unprepared runtime without downloading or launching', async () => {
     const temp = await mkdtemp(join(tmpdir(), 'unprepared-plugin-'))
     try {

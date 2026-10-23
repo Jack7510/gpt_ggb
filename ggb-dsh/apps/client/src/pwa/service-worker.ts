@@ -4,8 +4,8 @@
  * or retries run mutations.
  */
 export const SHELL_CACHE = 'ggb-shell-v1'
-// New bytes at pinned engine URLs: retire the pre-path-origin-fix cache.
-export const RUNTIME_CACHE = 'ggb-runtime-v2'
+// Client 5.4.932.1 replaces both raw v1 and patched 5.4.929.3 v2 assets.
+export const RUNTIME_CACHE = 'ggb-runtime-v3'
 export const PUBLIC_CACHES = [SHELL_CACHE, RUNTIME_CACHE] as const
 
 export type CacheStrategy = 'immutable' | 'revalidate' | 'runtime' | 'network-only'

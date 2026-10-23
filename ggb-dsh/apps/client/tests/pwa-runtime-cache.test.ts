@@ -19,7 +19,7 @@ async function worker() {
   vi.stubGlobal('location', { origin: 'http://localhost' })
   vi.stubGlobal('addEventListener', (type: string, handler: (event: WorkerEvent) => void) => handlers.set(type, handler))
   vi.stubGlobal('caches', {
-    keys: async () => ['ggb-shell-v1', 'ggb-runtime-v1', 'ggb-runtime-v2'],
+    keys: async () => ['ggb-shell-v1', 'ggb-runtime-v1', 'ggb-runtime-v2', 'ggb-runtime-v3'],
     delete: remove,
     open: async () => ({ match, put }),
   })
@@ -40,9 +40,9 @@ describe('PWA runtime compatibility cache migration', () => {
     const f = await worker()
     f.handlers.get('activate')?.(f.event)
     await f.event.waitUntil.mock.calls[0]?.[0]
-    expect(f.remove.mock.calls).toEqual([['ggb-runtime-v1']])
+    expect(f.remove.mock.calls).toEqual([['ggb-runtime-v1'], ['ggb-runtime-v2']])
     expect(f.claim).toHaveBeenCalledOnce()
-    expect(f.module.RUNTIME_CACHE).toBe('ggb-runtime-v2')
+    expect(f.module.RUNTIME_CACHE).toBe('ggb-runtime-v3')
   })
 
   it('bypasses the old HTTP cache on first download, then reuses fixed bytes', async () => {

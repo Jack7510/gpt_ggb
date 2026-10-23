@@ -27,11 +27,12 @@ async function fixture(t) {
   }))
   await writeFile(join(directory, 'plugin/compat.js'), `
 import { writeFile } from 'node:fs/promises'
+export const writeAtomicFile = writeFile
 import { join } from 'node:path'
 export async function prepareRuntimeCompatibility(root, version) {
   if (version !== 'fixture') throw new Error('version mismatch')
   await writeFile(join(root, 'prepared'), 'fixed')
-  return { id: 'verified-recipe', sha256: 'patched' }
+  return { patchId: 'verified-recipe', patchedSha256: 'patched' }
 }`)
   const args = [join(directory, 'tools/provision-geogebra.mjs'),
     '--plugin-root', join(directory, 'plugin'), '--public-root', join(directory, 'public')]
@@ -44,7 +45,7 @@ test('an existing runtime is prepared, recorded and safely reused', async t => {
     await run(process.execPath, args)
     assert.equal(await readFile(join(directory, 'public/geogebra/prepared'), 'utf8'), 'fixed')
     const manifest = JSON.parse(await readFile(join(directory, 'public/geogebra-runtime-manifest.json'), 'utf8'))
-    assert.deepEqual(manifest.compatibility, { id: 'verified-recipe', sha256: 'patched' })
+    assert.deepEqual(manifest.compatibility, { patchId: 'verified-recipe', patchedSha256: 'patched' })
   }
 })
 
