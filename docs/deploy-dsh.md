@@ -290,3 +290,20 @@ curl -fsSI https://<public-host>/geogebra/deployggb.js
 - 不让 Edge、APM、WAF、debug proxy 或容器命令行记录 `X-GGB-Provider-Key`、Authorization 或 runToken。
 - 不把 SQLite、Memory store、临时 Vite server 或本地测试 secret 用作生产方案。
 - 不在未授权情况下对真实 Provider、真实 GeoGebra 或生产数据库进行 smoke、迁移、回滚或清理操作。
+
+
+### 开发插件加载身份核对
+
+重新运行 `sh tools/deploy-ggb-dsh.sh --doctor`，让启动器构建并加载当前插件源码副本。
+开发启动器先释放 8081/5173，再创建新的隔离安装目录。执行前应确认没有需要保留的活动任务。
+本操作只启动本机开发服务；不发布 vendor 包，不调用 Provider。
+
+核对该次输出目录中的 `installation.json` 与 `worker.log`：
+
+| 字段 | 一致条件 |
+| --- | --- |
+| `developmentPayloadSha256` | 等于 Worker 启动日志中的 `packageIntegrity` |
+| `workerSkillSha256` | 等于 Worker 启动日志中的同名值，并与源码生成的 capabilities 一致 |
+
+再确认 `/api/v3/health/ready` 返回就绪。Git 提交、旧 ready.json 或安装目录存在都不能
+证明正在运行的 Worker 已更新。Doctor 和就绪检查不等于真实模型任务验收。

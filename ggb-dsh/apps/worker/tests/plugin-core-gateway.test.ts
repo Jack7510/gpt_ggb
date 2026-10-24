@@ -25,7 +25,7 @@ describe('plugin-core gateway', () => {
     const result = await subject.dispatch({ toolName: 'ggb_check', runId, turnId: 'turn', epoch: 1,
       arguments: { protocolVersion: 2, prompt: 'draw a circle' } })
     expect(result).toMatchObject({ status: 'accepted', toolName: 'ggb_check',
-      result: { validation: 'structural' } })
+      result: { validation: 'structural' }, buildBudget: { used: 0, limit: 3, remaining: 3 } })
     expect(runner.check).toHaveBeenCalledOnce()
     expect(runner.build).not.toHaveBeenCalled()
   })
@@ -54,7 +54,8 @@ describe('plugin-core gateway', () => {
     const result = await subject.dispatch({ toolName: 'ggb_build', runId, turnId: 'turn', epoch: 1,
       arguments: { protocolVersion: 2, prompt: 'draw a circle' } })
     expect(result).toMatchObject({ status: 'rejected', result: null,
-      errors: [{ code: 'plugin_build_rejected', message: 'verification failed' }] })
+      errors: [{ code: 'plugin_build_rejected', message: 'verification failed' }],
+      buildBudget: { used: 1, limit: 3, remaining: 2 } })
   })
 
   it('names the first rejected checks for model-facing repair', async () => {
@@ -87,15 +88,17 @@ describe('plugin-core gateway', () => {
       const result = await subject.dispatch({ toolName: 'ggb_build', runId, turnId: 'turn', epoch: 1,
         arguments: { protocolVersion: 2, prompt: 'draw a circle' } })
       expect(result.status).toBe('accepted')
+      expect(result.buildBudget).toEqual({ used: index + 1, limit: 3, remaining: 2 - index })
     }
     const blocked = await subject.dispatch({ toolName: 'ggb_build', runId, turnId: 'turn', epoch: 1,
       arguments: { protocolVersion: 2, prompt: 'draw a circle' } })
     expect(blocked).toMatchObject({ status: 'rejected', errors: [{ code: 'build_limit_reached' }] })
-    expect(runner.build).toHaveBeenCalledTimes(3)
+    expect(blocked.buildBudget).toEqual({ used: 3, limit: 3, remaining: 0 })
     subject.resetRun(runId)
     const afterReset = await subject.dispatch({ toolName: 'ggb_build', runId, turnId: 'turn', epoch: 1,
       arguments: { protocolVersion: 2, prompt: 'draw a circle' } })
     expect(afterReset.status).toBe('accepted')
+    expect(afterReset.buildBudget).toEqual({ used: 1, limit: 3, remaining: 2 })
   })
 
   it('does not consume a build when structural preflight rejects', async () => {
@@ -109,13 +112,27 @@ describe('plugin-core gateway', () => {
     const rejected = await subject.dispatch({ toolName: 'ggb_build', runId, turnId: 'turn', epoch: 1,
       arguments: { protocolVersion: 2, prompt: 'draw a circle' } })
     expect(rejected).toMatchObject({ status: 'rejected',
-      errors: [{ code: 'invalid_input' }] })
+      errors: [{ code: 'invalid_input' }], buildBudget: { used: 0, limit: 3, remaining: 3 } })
     for (let index = 0; index < 3; index += 1) {
       const result = await subject.dispatch({ toolName: 'ggb_build', runId, turnId: 'turn', epoch: 1,
         arguments: { protocolVersion: 2, prompt: 'draw a circle' } })
       expect(result.status).toBe('accepted')
     }
     expect(runner.build).toHaveBeenCalledTimes(4)
+  })
+
+  it('isolates budgets by run while serializing concurrent builds', async () => {
+    const { gateway: subject, runner } = gateway()
+    const call = (id = runId) => subject.dispatch({ toolName: 'ggb_build', runId: id,
+      turnId: 'turn', epoch: 1, arguments: {} })
+    const results = await Promise.all([call(), call(), call(), call()])
+    expect(results.map(result => result.buildBudget?.remaining)).toEqual([2, 1, 0, 0])
+    expect(runner.build).toHaveBeenCalledTimes(3)
+    const other = await call(runIdSchema.parse('run_00000000-0000-4000-8000-000000000002'))
+    expect(other.buildBudget).toEqual({ used: 1, limit: 3, remaining: 2 })
+    const checked = await subject.dispatch({ toolName: 'ggb_check', runId,
+      turnId: 'turn', epoch: 1, arguments: {} })
+    expect(checked.buildBudget?.remaining).toBe(0)
   })
 
   it('inspects the Worker base and passes it to check/build', async () => {

@@ -14,6 +14,7 @@ export interface PluginReleaseLock {
 }
 export interface InstalledPlugin {
   root: string; serverPatch: string; sdkVersion: string; packageIntegrity: string
+  workerSkillSha256: string
   assertRuntimeReady(): Promise<unknown>
 }
 
@@ -56,5 +57,5 @@ export async function loadInstalledPlugin(root: string, lockPath: string): Promi
     throw new Error('plugin_core_release_identity_mismatch')
   }
   return { root: canonical, serverPatch: installation.serverPatch, sdkVersion: lock.sdkVersion,
-    packageIntegrity: lock.archiveSha256, assertRuntimeReady: module.assertRuntimeReady }
+    packageIntegrity: lock.archiveSha256, workerSkillSha256: lock.workerSkillSha256, assertRuntimeReady: module.assertRuntimeReady }
 }

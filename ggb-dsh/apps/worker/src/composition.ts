@@ -31,6 +31,7 @@ const MAX_CHANNEL_MESSAGE_BYTES = 16_777_216
 
 export interface WorkerComposition {
   config: WorkerEnvConfig
+  pluginIdentity: Pick<InstalledPlugin, 'packageIntegrity' | 'workerSkillSha256'>
   start(): Promise<void>
   dispose(): Promise<void>
 }
@@ -99,6 +100,7 @@ export async function composeWorker(env: NodeJS.ProcessEnv = process.env, depend
   let retentionTimer: NodeJS.Timeout | undefined
   return {
     config,
+    pluginIdentity: { packageIntegrity: plugin.packageIntegrity, workerSkillSha256: plugin.workerSkillSha256 },
     async start(): Promise<void> {
       await assertProcessScopeSupported()
       await state.fenceOrphans()

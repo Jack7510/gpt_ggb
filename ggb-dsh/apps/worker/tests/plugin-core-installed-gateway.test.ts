@@ -170,7 +170,7 @@ describe.skipIf(!installedRoot)('installed protocol 2 to the host (no SDK turn/p
     const h = await harness()
     const topics = ['request', 'program', 'verification', 'interactions', 'patterns', 'naming']
     expect(await h.tools.createTool('ggb_inspect').execute({ references: topics }, context()))
-      .toEqual({ status: 'accepted', toolName: 'ggb_inspect', errors: [], result: expectedReferences(h, topics) })
+      .toEqual({ status: 'accepted', toolName: 'ggb_inspect', errors: [], result: expectedReferences(h, topics), buildBudget: { used: 0, limit: 3, remaining: 3 } })
     expect(h.runner.references).toHaveBeenCalledOnce()
     expect((await h.ledger()).calls).toHaveLength(1)
     expect(h.runner.build).not.toHaveBeenCalled()
@@ -180,7 +180,7 @@ describe.skipIf(!installedRoot)('installed protocol 2 to the host (no SDK turn/p
     const args = { references: ['request', 'verification', 'request'] }
     const result = await h.tools.createTool('ggb_inspect').execute(args, context())
     expect(result).toEqual({ status: 'accepted', toolName: 'ggb_inspect', errors: [],
-      result: expectedReferences(h, args.references) })
+      result: expectedReferences(h, args.references), buildBudget: { used: 0, limit: 3, remaining: 3 } })
     expect(h.runner.references).toHaveBeenCalledOnce()
     expect(h.runner.reference).not.toHaveBeenCalled()
     expect((await h.ledger()).calls[0]).toMatchObject({ arguments: args, operation: 'reference', stage: 'accepted' })

@@ -69,6 +69,8 @@ describe('default installed composition', () => {
       maxConcurrentRuns: 1, activeRunTtlMs: 60_000, terminalRunTtlMs: 60_000 })
     try {
       await worker.start()
+      expect(worker.pluginIdentity).toEqual({ packageIntegrity: release.archiveSha256,
+        workerSkillSha256: release.workerSkillSha256 })
       const runId = runIdSchema.parse(`run_${randomUUID()}`)
       await api.createRun({ runId, runToken: 'test-token', idempotencyKey: runId,
         providerKey: 'fake-provider-key', prompt: request.prompt, base: null, requestDigest: 'b'.repeat(64) })

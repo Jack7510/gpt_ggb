@@ -539,6 +539,17 @@ CLI 不接受该字段。check/build 和回执绑定展开后的同一请求摘�
 隐藏数值对象的 labelVisible 在现有运行证据中首次于重载后变化；值、defined、visible 保持。
 离线回放覆盖该差异。快照归一化不豁免显式样式要求；可选隐藏样式可只要求 visible:false，
 显式 labelVisible 仍须重载通过。该证据定位导出/重载边界，尚不能区分引擎序列化与加载内部原因。
+Worker 在每次正常工具结果和可恢复草稿拒绝中返回 `buildBudget:{used,limit,remaining}`。
+预算来自同一 run 的真实配额账本，在执行完成和合法 preflight 退款后读取；认证失败不返回预算。
+成功、执行失败、超限和并发调用使用同一计数；其他 run 不共享计数。Worker Skill 要求零余额时停止修复和
+check/build，报告已有证据；该提示不增加额度，也不取消宿主的硬上限。
+Worker 启动成功后记录实际加载的 packageIntegrity 与 workerSkillSha256。开发重启后须将
+该日志与本次 installation.json 核对，不能把 Git HEAD 或供应目录存在当作已加载证据。
+插件只允许完整双引号字符串内部的分号；字符串外多语句、控制字符和未闭合引号仍拒绝。
+真实 5.4.932.1 对照证实：Text 的位置参数不能是 vector，JSON 传输转义不能残留在 source。
+固定 `program.text` 小节记录文字语法和 point/vector 边界。严格内点须保持约束，不能只用
+初始坐标；PointIn 的区域包含边界。正权重内点示例通过完整核验，不放宽任何失败条件。
+
 
 Client 发送续做请求时重新读取选中对象，不复用输入框提示缓存。
 每个对象带精确 `label`、引擎 `type` 和显示 `displayName`，最多 16 项；按标签去重，不按显示名合并。

@@ -2,6 +2,7 @@ import { composeWorker } from './composition.js'
 
 const app = await composeWorker()
 await app.start()
+console.log(`[worker] installed plugin: ${JSON.stringify(app.pluginIdentity)}`)
 console.log(
   `[worker] ${app.config.workerInstanceId} listening on ${app.config.socketPath} (plugin-core concurrency ${app.config.pluginCoreMaxConcurrentRuns})`,
 )

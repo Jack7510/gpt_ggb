@@ -69,6 +69,7 @@ export interface PluginCoreToolResult {
   readonly result: unknown | null
   readonly errors: readonly PluginCoreToolError[]
   readonly report?: PluginCoreToolReport
+  readonly buildBudget?: { readonly used: number; readonly limit: number; readonly remaining: number }
 }
 
 export interface PluginCoreGatewayOptions {
@@ -117,7 +118,7 @@ export class PluginCoreGateway {
       domainRequestDigest: toolArgumentsDigest(request.arguments) })
     const callId = randomUUID()
     try {
-      const result = await this.executeSaved(request, signal, call, callId)
+      const result = this.withBudget(request.runId, await this.executeSaved(request, signal, call, callId))
       this.options.state?.reportProgress(request.runId, { tool: request.toolName, status: result.status, callId,
         ...(result.report?.buildId ? { buildId: result.report.buildId } : {}) })
       await call?.update(result.status)
@@ -127,7 +128,7 @@ export class PluginCoreGateway {
         this.options.state?.reportProgress(request.runId, { tool: request.toolName, status: 'rejected', callId })
         await call?.failed(error)
         const code = 'code' in error && typeof error.code === 'string' ? error.code : 'invalid_input'
-        return this.rejected(request.toolName, code, error.message)
+        return this.withBudget(request.runId, this.rejected(request.toolName, code, error.message))
       }
       this.options.state?.reportProgress(request.runId, { tool: request.toolName, status: 'failed', callId })
       if (error instanceof Error && error.message === 'plugin_core_cleanup_failed') {
@@ -272,6 +273,13 @@ export class PluginCoreGateway {
       this.builds.set(runId, builds)
     }
     return projected
+  }
+
+  /** Read the same serialized ledger that reserves and refunds actual builds. */
+  private withBudget(runId: RunId, result: PluginCoreToolResult): PluginCoreToolResult {
+    const used = this.builds.get(runId) ?? 0
+    const limit = this.options.maxBuildsPerRun ?? DEFAULT_MAX_BUILDS_PER_RUN
+    return { ...result, buildBudget: { used, limit, remaining: Math.max(0, limit - used) } }
   }
 
   /** Forget per-run counters after the run reaches a terminal state. */

@@ -12,7 +12,7 @@ import { PluginCoreGateway } from '../src/plugin-core/gateway.js'
 import { PluginCoreToolGatewayServer } from '../src/plugin-core/tool-gateway-server.js'
 
 type Tool = 'ggb_request' | 'ggb_check' | 'ggb_build'
-interface Result { status: string; result: Record<string, unknown> | null; errors: { code: string }[] }
+interface Result { buildBudget: { used: number; limit: number; remaining: number }; status: string; result: Record<string, unknown> | null; errors: { code: string }[] }
 const cleanup: (() => Promise<void>)[] = []
 afterEach(async () => { for (const close of cleanup.splice(0)) await close() })
 async function fixture(prompt = 'Create point P and number n') {
@@ -160,8 +160,24 @@ it('keeps a recoverable draft error code separate from its human message', async
   const f = await fixture()
   expect(await f.call('ggb_request', { requestText: '{' })).toMatchObject({
     status: 'rejected', errors: [{ code: 'draft_request_json', message: 'requestText is not valid JSON' }],
+    buildBudget: { used: 0, limit: 3, remaining: 3 },
   })
   await f.save()
   expect((await f.call('ggb_check', { revision: 4 })).status).toBe('accepted')
   expect(f.build).not.toHaveBeenCalled()
+})
+
+
+it('returns the real build budget through the authenticated installed tool channel', async () => {
+  const f = await fixture(); await f.save()
+  const checked = await f.call('ggb_check', { revision: 4 })
+  expect(checked.buildBudget).toEqual({ used: 0, limit: 3, remaining: 3 })
+  for (let used = 1; used <= 3; used++) {
+    expect((await f.call('ggb_build', { checkedRequestId: checked.result!.checkedRequestId })).buildBudget)
+      .toEqual({ used, limit: 3, remaining: 3 - used })
+  }
+  const blocked = await f.call('ggb_build', { checkedRequestId: checked.result!.checkedRequestId })
+  expect(blocked).toMatchObject({ errors: [{ code: 'build_limit_reached' }],
+    buildBudget: { used: 3, limit: 3, remaining: 0 } })
+  expect(f.build).toHaveBeenCalledTimes(3)
 })
