@@ -57,7 +57,7 @@ export class PluginCoreToolGatewayServer {
     signal?.addEventListener('abort', onAbort, { once: true })
     if (signal?.aborted === true) abort.abort()
     this.bindings.set(turnId, { runId, epoch, draft: this.protocol.createDraft(prompt),
-      references: new PluginCoreReferenceHistory(this.protocol.preloadedReferenceTopics, this.protocol.maxReferenceBytes),
+      references: new PluginCoreReferenceHistory(this.protocol.preloadedReferenceTopics, this.protocol.maxReferenceBytes, this.protocol.referenceCoverage),
       imageInput: new PluginCoreImageInputContract(imageAttached),
       token: Buffer.from(token, 'hex'), abort,
       ...(signal === undefined ? {} : { signal, onAbort }) })

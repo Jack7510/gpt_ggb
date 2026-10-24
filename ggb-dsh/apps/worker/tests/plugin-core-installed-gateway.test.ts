@@ -9,6 +9,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { runIdSchema } from '@ggb-copilot/application'
 import { PluginCoreEvidenceStore } from '../src/plugin-core/evidence.js'
+import { PluginCoreReferenceHistory } from '../src/plugin-core/reference-history.js'
 import { PluginCoreGateway } from '../src/plugin-core/gateway.js'
 import { PluginCoreToolGatewayServer } from '../src/plugin-core/tool-gateway-server.js'
 import { loadInstalledToolProtocol } from '../src/plugin-core/tool-protocol.js'
@@ -52,8 +53,9 @@ async function harness(prompt = '', preloadedReferenceTopics?: readonly string[]
   }
   const protocol = { protocol: { ...await loadInstalledToolProtocol(installedRoot!),
     ...(preloadedReferenceTopics === undefined ? {} : { preloadedReferenceTopics }) } }
+  const gateway = new PluginCoreGateway(runner, { evidence })
   const server = new PluginCoreToolGatewayServer(join(dir, 'host.sock'),
-    new PluginCoreGateway(runner, { evidence }), 2000, { evidence, ...protocol })
+    gateway, 2000, { evidence, ...protocol })
   servers.push(server); await server.listen()
   const token = server.openTurn(runId, turnId, 1, undefined, prompt, imageAttached)
   evidence.get(turnId)!.addSecrets(['fake-provider-secret'])
@@ -61,7 +63,7 @@ async function harness(prompt = '', preloadedReferenceTopics?: readonly string[]
     GGB_PLUGIN_CORE_TOOL_RUN_ID: runId, GGB_PLUGIN_CORE_TOOL_TURN_ID: turnId,
     GGB_PLUGIN_CORE_TOOL_EPOCH: '1', GGB_PLUGIN_CORE_TOOL_TOKEN: token })) vi.stubEnv(key, value)
   const ledger = async () => JSON.parse(await readFile(join(dir, runId, 'diagnostics', `${turnId}.json`), 'utf8'))
-  return { dir, runId, turnId, evidence, runner, server, token, ledger,
+  return { dir, runId, turnId, evidence, runner, gateway, server, token, ledger,
     preloaded: protocol.protocol.preloadedReferenceTopics ?? [], ...plugin }
 }
 function expectedReferences(h: Awaited<ReturnType<typeof harness>>, topics: string[]) {
@@ -147,6 +149,22 @@ describe.skipIf(!installedRoot)('installed protocol 2 to the host (no SDK turn/p
     expect(await h.tools.createTool('ggb_inspect').execute({ reference: 'program' }, context()))
       .toMatchObject({ status: 'accepted', result: { topic: 'program', content: expect.any(String) } })
     expect(h.runner.reference).toHaveBeenCalledOnce()
+  })
+  it('projects chapter/section coverage in gateway results without check/build side effects', async () => {
+    const h = await harness()
+    const history = new PluginCoreReferenceHistory([], 24 * 1024,
+      id => id === 'program' ? ['program', 'program.outputs', 'program.cas'] : [id])
+    const call = (reference: string) => h.gateway.dispatch({ runId: h.runId, turnId: h.turnId,
+      epoch: 1, protocolVersion: 3, requestId: randomUUID(), toolCallId: randomUUID(),
+      toolName: 'ggb_inspect', arguments: { reference }, referenceHistory: history })
+    expect(await call('program.outputs')).toMatchObject({ status: 'accepted', result: { topic: 'program.outputs' } })
+    expect(await call('program.cas')).toMatchObject({ status: 'accepted', result: { topic: 'program.cas' } })
+    expect(await call('program')).toMatchObject({ status: 'accepted', result: { topic: 'program' } })
+    expect(await call('program.outputs')).toMatchObject({ result: { alreadyAvailable: ['program.outputs'] } })
+    expect(h.runner.reference).toHaveBeenCalledTimes(3)
+    expect(h.runner.check).not.toHaveBeenCalled()
+    expect(h.runner.build).not.toHaveBeenCalled()
+    expect((await h.ledger()).calls).toHaveLength(4)
   })
   it('returns all six complete references through one authenticated tool call', async () => {
     const h = await harness()

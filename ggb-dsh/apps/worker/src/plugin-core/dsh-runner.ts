@@ -191,7 +191,7 @@ export class PluginCoreDshRunner {
     const image = imageAttached
       ? 'An image is attached. First transcribe it into complete mathematical problem text (givens, equations, labels, constraints and question). Include it in transcription on the first ggb_request, outside requestText. Preserve ambiguity; do not solve or invent conditions.'
       : 'No image is attached; transcription is optional.'
-    return `Host task facts:\n${state}\n${image}\nUse the injected Worker request contract. Choose one adequate construction and submit once its checks are ready. Read references only for a specific unresolved gap; do not reread request or compare known alternatives before submitting.`
+    return `Host task facts:\n${state}\n${image}\nUse the injected Worker request contract. Choose one adequate construction and submit once its checks are ready. Read references only for a specific unresolved gap; prefer fixed sections when available. Follow the injected submission-readiness rule; do not reread request or compare known alternatives before submitting.`
   }
 
   private async runBounded(runId: RunId, harness: PluginCoreHarnessPort, prompt: string | SdkPromptContentBlock[], turnId: string,

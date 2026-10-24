@@ -31,3 +31,27 @@ it('checks complete topic identities and the final escaped response budget befor
   expect(await history.read(['program'], read)).toEqual({ topic: 'program', content: 'x' })
   expect(read).toHaveBeenCalledOnce()
 })
+
+
+it('records chapter coverage only after success and isolates partial sections and turns', async () => {
+  const coverage = (id: string) => id === 'program' ? ['program', 'program.outputs', 'program.cas'] : [id]
+  const history = new PluginCoreReferenceHistory(['request'], 24 * 1024, coverage)
+  const load = vi.fn(async (ids: string[]) => ({ references: ids.map(topic => ({ topic, content: `body:${topic}` })) }))
+  await history.read(['program.outputs'], load)
+  await history.read(['program.cas'], load)
+  expect(load).toHaveBeenCalledTimes(2)
+  await history.read(['program'], load)
+  expect(load).toHaveBeenCalledTimes(3)
+  expect(await history.read(['program.cas', 'program.outputs', 'request'], load))
+    .toMatchObject({ alreadyAvailable: ['program.cas', 'program.outputs', 'request'] })
+  expect(load).toHaveBeenCalledTimes(3)
+  await history.read(['program.outputs'], load, true)
+  expect(load).toHaveBeenCalledTimes(4)
+  const other = new PluginCoreReferenceHistory([], 24 * 1024, coverage)
+  await other.read(['program.outputs'], load)
+  expect(load).toHaveBeenCalledTimes(5)
+  const fail = new PluginCoreReferenceHistory([], 60, coverage)
+  await expect(fail.read(['program'], async () => ({ topic: 'program', content: 'x'.repeat(100) })))
+    .rejects.toThrow('reference_response_oversized')
+  await fail.read(['program.outputs'], async () => ({ topic: 'program.outputs', content: 'x' }))
+})

@@ -24,6 +24,7 @@ export interface HostDraftSession {
 export interface HostToolProtocol {
   readonly version: 3
   readonly preloadedReferenceTopics?: readonly string[]
+  readonly referenceCoverage?: (id: string) => readonly string[]
   readonly maxFrameBytes: number
   readonly maxReferenceBytes?: number
   createDraft(prompt: string): HostDraftSession
@@ -44,7 +45,11 @@ export async function loadInstalledToolProtocol(pluginRoot: string): Promise<Hos
   if (!Array.isArray(preloaded) || !preloaded.every(topic => typeof topic === 'string' && module.REFERENCE_TOPICS.includes(topic))) {
     throw new Error('plugin_core_reference_contract_invalid')
   }
-  return { version: 3, preloadedReferenceTopics: preloaded, maxFrameBytes: module.LIMITS.frameBytes,
+  if (module.REFERENCE_SECTIONS !== undefined && typeof module.referenceCoverage !== 'function') {
+    throw new Error('plugin_core_reference_contract_invalid')
+  }
+  return { version: 3, preloadedReferenceTopics: preloaded,
+    ...(typeof module.referenceCoverage === 'function' ? { referenceCoverage: module.referenceCoverage } : {}), maxFrameBytes: module.LIMITS.frameBytes,
     maxReferenceBytes: module.LIMITS.referenceBytes,
     createDraft: prompt => new drafts.RequestDraft(prompt),
     parse(input) { const value = module.parseToolRequest(input); runIdSchema.parse(value.runId); return value },

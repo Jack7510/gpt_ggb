@@ -1,8 +1,9 @@
-/** Turn-owned topic identities only; complete reference contents stay in model context. */
+/** Turn-owned chapter/section identities only; complete reference contents stay in model context. */
 export class PluginCoreReferenceHistory {
   private readonly available: Set<string>
-  constructor(preloaded: readonly string[] = [], private readonly maxBytes = 24 * 1024) {
-    this.available = new Set(preloaded)
+  constructor(preloaded: readonly string[] = [], private readonly maxBytes = 24 * 1024,
+    private readonly coverage: (id: string) => readonly string[] = id => [id]) {
+    this.available = new Set(preloaded.flatMap(id => [...coverage(id)]))
   }
 
   /** Failed reads do not change history; different turns never share this state. */
@@ -21,7 +22,7 @@ export class PluginCoreReferenceHistory {
     }
     const response = alreadyAvailable.length ? { ...result, alreadyAvailable } : result
     if (Buffer.byteLength(JSON.stringify(response)) > this.maxBytes) throw new Error('ggb_reference_response_oversized')
-    for (const topic of missing) this.available.add(topic)
+    for (const topic of missing) for (const id of this.coverage(topic)) this.available.add(id)
     return response
   }
 }
