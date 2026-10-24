@@ -12,26 +12,27 @@ import { runIdSchema } from '@ggb-copilot/application'
 import { PluginCoreDshRunner } from '../src/plugin-core/dsh-runner.js'
 import { PluginCoreGateway } from '../src/plugin-core/gateway.js'
 import { PluginCoreToolGatewayServer } from '../src/plugin-core/tool-gateway-server.js'
-import { PluginCoreEvidenceStore } from '../src/plugin-core/evidence.js'
+import { EVIDENCE_LIMITS, PluginCoreEvidenceStore } from '../src/plugin-core/evidence.js'
 import { serverPatch, toolProtocol } from './fixtures/installed-plugin.js'
 
 // A real SDK process against local SSE; never the public Provider or a browser.
 describe('wire diagnostics across a real SDK Server', () => {
-  it('completes a local SDK turn beyond the optional 16-request diagnostic budget', async () => {
+  it('completes a local SDK turn beyond the optional diagnostic budget', async () => {
     const root = await mkdtemp(join(tmpdir(), 'sdk-wire-limit-'))
     let requests = 0
     let calls = 0
+    const toolCalls = EVIDENCE_LIMITS.calls + 1
     const server = createServer(async (req, res) => {
       for await (const _chunk of req) { /* local fixture only */ }
       const index = ++requests
-      const block = index <= 17 ? { type: 'tool_use', id: `call_${index}`, name: 'ggb_inspect', input: {} }
+      const block = index <= toolCalls ? { type: 'tool_use', id: `call_${index}`, name: 'ggb_inspect', input: {} }
         : { type: 'text', text: '' }
-      const delta = index <= 17 ? { type: 'input_json_delta', partial_json: JSON.stringify({ reference: 'patterns' }) }
+      const delta = index <= toolCalls ? { type: 'input_json_delta', partial_json: JSON.stringify({ reference: 'patterns' }) }
         : { type: 'text_delta', text: 'done' }
       const events = [{ type: 'message_start', message: { usage: { input_tokens: 1, output_tokens: 0 } } },
         { type: 'content_block_start', index: 0, content_block: block },
         { type: 'content_block_delta', index: 0, delta }, { type: 'content_block_stop', index: 0 },
-        { type: 'message_delta', delta: { stop_reason: index <= 17 ? 'tool_use' : 'end_turn' }, usage: { output_tokens: 1 } },
+        { type: 'message_delta', delta: { stop_reason: index <= toolCalls ? 'tool_use' : 'end_turn' }, usage: { output_tokens: 1 } },
         { type: 'message_stop' }]
       res.writeHead(200, { 'content-type': 'text/event-stream' })
       res.end(events.map(event => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`).join(''))
@@ -52,10 +53,10 @@ describe('wire diagnostics across a real SDK Server', () => {
         evidence: new PluginCoreEvidenceStore(root) }, gateway)
       const result = await runner.run({ runId, turnId, epoch: 1, providerKey: 'fake-local-only', prompt: 'fixture', baseAttached: false })
       expect(result.finalResponse).toBe('done')
-      expect(calls).toBe(17)
-      expect(requests).toBe(18)
+      expect(calls).toBe(toolCalls)
+      expect(requests).toBe(toolCalls + 1)
       const stream = JSON.parse(await readFile(join(root, runId, 'diagnostics', `${turnId}.stream.json`), 'utf8'))
-      expect(stream.requests).toHaveLength(16)
+      expect(stream.requests).toHaveLength(EVIDENCE_LIMITS.calls)
       expect(stream.droppedRequests).toBe(2)
     } finally {
       await gateway.close()
@@ -72,6 +73,10 @@ describe('wire diagnostics across a real SDK Server', () => {
       for await (const chunk of req) chunks.push(chunk)
       body = JSON.parse(Buffer.concat(chunks).toString())
       const events = [{ type: 'message_start', message: { usage: { input_tokens: 1 } } },
+        { type: 'content_block_start', index: 1, content_block: { type: 'thinking', thinking: '' } },
+        { type: 'content_block_delta', index: 1, delta: { type: 'thinking_delta', thinking: 'PRIVATE_REASONING' } },
+        { type: 'content_block_delta', index: 1, delta: { type: 'signature_delta', signature: 'PRIVATE_SIGNATURE' } },
+        { type: 'content_block_stop', index: 1 },
         { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
         { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'done' } },
         { type: 'content_block_stop', index: 0 }, { type: 'message_delta',
@@ -105,12 +110,20 @@ describe('wire diagnostics across a real SDK Server', () => {
       const stream = JSON.parse(await readFile(join(root, runId, 'diagnostics', `${turnId}.stream.json`), 'utf8'))
       const request = stream.requests[0]
       expect(request.providerRequest).toMatchObject({ thinking: 'enabled', effort: 'high' })
+      expect(request.performance).toMatchObject({ timing: {
+        requestSentMs: expect.any(Number), responseHeadersMs: expect.any(Number),
+        firstByteMs: expect.any(Number), firstEventMs: expect.any(Number),
+        firstThinkingMs: expect.any(Number), firstTextMs: expect.any(Number), firstToolInputMs: null,
+        streamEndMs: expect.any(Number), postStreamMs: expect.any(Number),
+      }, content: { thinking: { starts: 1, deltas: 1, bytes: 17 }, text: { starts: 1, deltas: 1, bytes: 4 } } })
       expect(request.providerRequest.jsonExamples).toContainEqual(expect.objectContaining({ validJson: true, rootKeys: ['requestText', 'locale'] }))
       expect(request.sdkRequest.tools).toHaveLength(4)
       expect(request.providerRequest.tools).toHaveLength(4)
       for (const tool of request.sdkRequest.tools) expect(request.providerRequest.tools)
         .toContainEqual(expect.objectContaining({ name: tool.name, schemaSha256: tool.schemaSha256 }))
       expect(JSON.stringify(stream)).not.toContain('fake-contract-key')
+      expect(JSON.stringify(stream)).not.toContain('PRIVATE_REASONING')
+      expect(JSON.stringify(stream)).not.toContain('PRIVATE_SIGNATURE')
     } finally {
       await gateway.close(); await new Promise<void>(resolve => server.close(() => resolve()))
       await rm(root, { recursive: true, force: true })

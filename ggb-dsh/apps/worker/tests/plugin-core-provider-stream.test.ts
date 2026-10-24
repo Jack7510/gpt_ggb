@@ -17,6 +17,57 @@ function events(argumentsText: string) {
 function tool(capture: ProviderToolStream) { return (capture.snapshot().tools as Record<string, unknown>[])[0]! }
 
 describe('wire versus public SDK tool stream evidence', () => {
+  it('separates observed wait and content timestamps without retaining content or signatures', () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1000)
+    try {
+      const capture = new ProviderToolStream(1, [])
+      clock.mockReturnValue(1010)
+      capture.providerRequest({})
+      clock.mockReturnValue(1100)
+      capture.httpStatus(200)
+      clock.mockReturnValue(1120)
+      capture.bytes(Buffer.from(': heartbeat\n\n'))
+      clock.mockReturnValue(1150)
+      capture.wire({ type: 'message_start' })
+      capture.wire({ type: 'content_block_start', content_block: { type: 'thinking', thinking: '' } })
+      clock.mockReturnValue(1200)
+      capture.wire({ type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: '秘密' } })
+      capture.wire({ type: 'content_block_delta', delta: { type: 'signature_delta', signature: 'PRIVATE_SIGNATURE' } })
+      clock.mockReturnValue(1500)
+      capture.wire({ type: 'content_block_start', content_block: { type: 'text', text: 'PRIVATE_TEXT' } })
+      capture.wire({ type: 'content_block_start', index: 0, content_block: { type: 'tool_use', input: {}, id: 'call', name: 'ggb_check' } })
+      clock.mockReturnValue(1700)
+      capture.wire({ type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: '{"revision":1}' } })
+      clock.mockReturnValue(1800)
+      capture.wire({ type: 'message_stop' })
+      clock.mockReturnValue(1850)
+      capture.finish()
+      expect(capture.snapshot().performance).toEqual({ timing: {
+        requestSentMs: 10, responseHeadersMs: 100, firstByteMs: 120, firstEventMs: 150,
+        firstContentMs: 200, firstThinkingMs: 200, firstTextMs: 500, firstToolInputMs: 700,
+        lastContentMs: 700, streamEndMs: 800, observedContentSpanMs: 500, postStreamMs: 50,
+      }, content: { thinking: { starts: 1, deltas: 1, bytes: 6 },
+        text: { starts: 1, deltas: 0, bytes: 12 }, toolInput: { starts: 1, deltas: 1, bytes: 14 } } })
+      const serialized = JSON.stringify(capture.snapshot())
+      for (const value of ['秘密', 'PRIVATE_TEXT', 'PRIVATE_SIGNATURE']) expect(serialized).not.toContain(value)
+    } finally { clock.mockRestore() }
+  })
+  it('leaves unobserved timings unknown on failure and ignores signatures and empty payloads', () => {
+    const capture = new ProviderToolStream(1, [])
+    capture.bytes(new Uint8Array())
+    capture.wire({ type: 'content_block_start', content_block: { type: 'text', text: '' } })
+    capture.wire({ type: 'content_block_delta', delta: { type: 'signature_delta', signature: 'PRIVATE' } })
+    capture.wire({ type: 'content_block_delta', delta: { type: 'unknown_delta', text: 'PRIVATE' } })
+    capture.failed(new Error('cancelled'))
+    capture.finish()
+    expect(capture.snapshot()).toMatchObject({ wireMessageStop: false, performance: {
+      timing: { requestSentMs: null, responseHeadersMs: null, firstByteMs: null, firstContentMs: null,
+        firstThinkingMs: null, firstTextMs: null, firstToolInputMs: null, streamEndMs: null,
+        observedContentSpanMs: null, postStreamMs: null },
+      content: { thinking: { starts: 0, deltas: 0, bytes: 0 }, text: { starts: 1, deltas: 0, bytes: 0 } },
+    } })
+    expect(JSON.stringify(capture.snapshot())).not.toContain('PRIVATE')
+  })
   it('records request timing, context sizes and final numeric usage without retaining history', () => {
     const clock = vi.spyOn(Date, 'now').mockReturnValue(1000)
     try {

@@ -1,4 +1,5 @@
 import { providerRequestFacts } from './provider-request-evidence.js'
+import { ProviderStreamPerformance } from './provider-stream-performance.js'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { createHash } from 'node:crypto'
 import { mkdir, rename, writeFile } from 'node:fs/promises'
@@ -17,14 +18,18 @@ interface RecordValue { [key: string]: unknown }
 /** Retain timing, numeric usage, context sizes and tool input; omit headers, reasoning and text output. */
 export class ProviderToolStream {
   private readonly startedAt = Date.now()
+  private readonly performance = new ProviderStreamPerformance(this.startedAt)
   private finishedAt: number | null = null
   private readonly usage: Record<string, number> = {}
   private sdkContract: RecordValue | null = null
   private wireContract: RecordValue | null = null
   private responseStatus: number | null = null
   sdkRequest(input: unknown): void { this.sdkContract = providerRequestFacts(input, 'sdk') }
-  providerRequest(input: unknown): void { this.wireContract = providerRequestFacts(input, 'messages') }
-  httpStatus(status: number): void { this.responseStatus = status }
+  providerRequest(input: unknown): void {
+    this.performance.mark('requestSentMs')
+    this.wireContract = providerRequestFacts(input, 'messages')
+  }
+  httpStatus(status: number): void { this.responseStatus = status; this.performance.mark('responseHeadersMs') }
   finish(): void { this.finishedAt ??= Date.now() }
   private buffer = ''
   private decoder = new TextDecoder()
@@ -38,6 +43,7 @@ export class ProviderToolStream {
   constructor(readonly request: number, private readonly secrets: string[]) {}
 
   bytes(chunk: Uint8Array): void {
+    if (chunk.byteLength) this.performance.mark('firstByteMs')
     this.buffer = (this.buffer + this.decoder.decode(chunk, { stream: true })).replace(/\r\n/gu, '\n')
     if (Buffer.byteLength(this.buffer) > 1024 * 1024) { this.buffer = ''; this.dropped++; return }
     let boundary: number
@@ -53,6 +59,7 @@ export class ProviderToolStream {
   }
 
   wire(event: RecordValue): void {
+    this.performance.event(event)
     const block = event.content_block as RecordValue | undefined
     const delta = event.delta as RecordValue | undefined
     const usage = (event.type === 'message_start' ? (event.message as RecordValue | undefined)?.usage
@@ -104,6 +111,7 @@ export class ProviderToolStream {
       startedAt: new Date(this.startedAt).toISOString(),
       finishedAt: this.finishedAt === null ? null : new Date(this.finishedAt).toISOString(),
       durationMs: this.finishedAt === null ? null : this.finishedAt - this.startedAt,
+      performance: this.performance.snapshot(this.finishedAt),
       usage: this.usage, stopReason: this.stopReason ?? null,
       responseStatus: this.responseStatus, wireMessageStop: this.ended, invalidFrames: this.invalidFrames,
       frameBytes: this.frameBytes, dropped: this.dropped, sdkFailure: this.failure,

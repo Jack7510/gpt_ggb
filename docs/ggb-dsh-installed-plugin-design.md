@@ -505,12 +505,36 @@ flowchart TD
 
 ### 6.1 失败证据
 
+Worker 的 `request` 参考和首轮系统提示使用安装包内同一份
+`references/worker-request.md`。CLI 的完整请求信封不进入该主题。
+简单任务可直接按注入契约提交；有知识缺口时只读取相关的 1–2 个主题，通常累计不超过 3 个。
+这不降低工具可读取的六主题上限，也不豁免基线检查。
+派生对象必须声明对定义输入的 `dependsOn` 检查；当前坐标正确不能代替依赖验收。
+工具验证已声明的检查，不负责从任意题目自动补全遗漏条件。
+
 Worker 必须在等待整个 RunResult 前通过 SDK 支持的通知接口采集有界事件。采集异常不能清空已经取得的
 事实。每个工具调用在准入、开始和结束处登记 requestId、toolCallId、buildId 及可用 SDK 映射。
 
 持久证据包括：脱敏请求及摘要、身份、安装版本、准入/启动/结束事实、具体 issues、工具结果、
 异常类型/位置/稳定码、退出码/signal、可取得的 stderr 尾部、清理结论、用量及缺失原因。
 未知用量保持 null，不能记成零；传输错误不能统一归为插件领域拒绝。
+
+每轮 Provider 的受限 `.stream.json` 增加 `performance`，只保存时间和计数：
+
+| 字段 | 来源与含义 |
+| --- | --- |
+| `timing.requestSentMs / responseHeadersMs` | SDK stream 开始至发送 wire 请求／收到 HTTP 响应头的实测偏移，单位 ms |
+| `timing.firstByteMs / firstEventMs` | 第一个非空响应字节块／可解析 SSE 事件；心跳字节不代表模型已生成内容 |
+| `timing.firstContentMs / firstThinkingMs / firstTextMs / firstToolInputMs` | 首个非空内容及各内容类别的实测偏移；空起始块和签名不算内容 |
+| `timing.lastContentMs / streamEndMs` | 最后一个非空内容／`message_stop` 事件的实测偏移 |
+| `timing.observedContentSpanMs / postStreamMs` | 首尾内容间隔／`message_stop` 至 SDK stream 关闭的间隔；没有相应观测时为 null |
+| `content.thinking / text / toolInput` | 各类 `starts`、`deltas` 和 UTF-8 `bytes`，包含非空起始内容，不记录正文或签名 |
+
+未收到的时间为 null。取消和异常不伪造 `message_stop`；零字节计数仅表示未观测到内容。
+字节数不是 token 数，首尾内容间隔不是纯推理耗时，不能据此推测模型决策。
+结合既有请求上下文字节、用量和工具开始／结束账本，区分模型流与工具执行开销。
+诊断限额、写入失败和未知 block 不改变流内容、任务预算或模型策略。
+本批保持 `reasoning:high` 和 `maxTokens:49152`，不修改 Provider 的历史 reasoning 回传。
 
 首期事件预算采用条数和总字节双限制，沿用已有帧、输出与响应上限；事件采集的准确上限须在批次 B
 固定到配置及测试。超限保留截断标记、首个根因、调用关联及有界尾部，不因日志截断放宽执行预算。
