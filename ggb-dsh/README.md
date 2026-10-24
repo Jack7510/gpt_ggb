@@ -114,20 +114,34 @@ Agent 的修改、验证与安全工作规则见 [AGENTS.md](../AGENTS.md)。
 | `GGB_PLUGIN_CORE_TOOL_SOCKET` | Worker 内部工具网关 socket |
 | `GGB_PLUGIN_CORE_MAX_CONCURRENT_RUNS` | Worker 并发上限 |
 | `PLAYWRIGHT_BROWSERS_PATH` / `HOME` / `TMPDIR` | 插件运行环境 |
-| `GGB_V3_DSH_TRACE_ROOT` | 仅调试；记录模型请求与原始回答，生产禁用 |
+| `GGB_V3_DSH_TRACE_ROOT` | 仅调试；覆盖 DSH home 根并保留纯文本 run 的 home；生产禁用 |
 
 ## 调试
 
 - **run 状态**：`GET /api/v3/plugin-core/runs/:id` 返回 phase、事件游标、交付与失败事实。
   SSE 使用 `/events?after=<cursor>`，首帧 `plugin_core.ready` 是快照，不写入事件表。
-- **日志**：`dev.sh` 把 worker/api 输出写到终端；隔离工具把每个进程的日志写到其临时目录。
-- **数据库**：SQLite 可用 `sqlite3 .local/runs.sqlite` 查看 `plugin_core_*` 表；
+- **进程日志**：`dev.sh` 在启动时打印日志目录。默认目录是 `.local/logs/<UTC 时间>-<PID>/`，
+  包含 `build.log`、`api.log`、`worker.log`；watch 模式还包含 `tsc.log`。
+  `GGB_V3_LOG_DIR` 可以指定目录。使用 `tail -f <目录>/worker.log <目录>/api.log` 查看实时输出。
+  仓库根目录的 `tools/deploy-ggb-dsh.sh` 将进程日志写入 `output/deploy-ggb-dsh/<启动批次>/`。
+- **数据库**：SQLite 的 `plugin_core_store_snapshot` 单行保存 run、事件和交付快照；
+  `dev.sh` 默认使用 `.local/runs.sqlite`，部署工具使用 `.local/deploy/runs.sqlite`。
   PG 使用 `GGB_V3_DATABASE_URL`。旧 `runs`/`run_events` 表不再由当前代码写入。
 - **插件失败**：检查 `plugin_core_failed` 事件的 code/message，以及
   `GGB_PLUGIN_CORE_OUTPUT_ROOT` 下的 runner 产物；不要记录 Provider Key 或用户画布正文。
 - **验证插件源码改动**：见[插件源码手工验证](../docs/ggb-dsh-plugin-manual-verification.md)；
   使用 `tools/manual-verify-plugin.sh` 启动测试安装，脚本在 Worker 就绪后恢复 release lock。
-- **采集诊断**：`GGB_V3_DSH_TRACE_ROOT` 只用于本机排障；不要在生产开启。
+- **run 诊断**：Worker 始终写入 `GGB_PLUGIN_CORE_OUTPUT_ROOT/<runId>/`，并在启动时打印根目录。
+  `dev.sh` 默认使用 `.local/plugin-core-runs`；部署工具使用 `.local/deploy/runs`。
+  `usage.json` 保存用量摘要；`diagnostics/<turnId>.json` 保存带时间戳的 SDK 生命周期、用量和脱敏工具参数、结果、错误。
+  `diagnostics/<turnId>.stream.json` 保存每次模型请求的起止时间、耗时、Token 用量、上下文字节数、HTTP 状态及工具流诊断。
+  每个 turn 最多保留 64 次 Provider 请求；超限记录 `droppedRequests`。这些字节数用于比较上下文大小，不是 Token 估算。
+  诊断省略完整提示词、消息历史、模型文本回答和推理正文。确认清理完成后，Worker 删除输入 GGB 和 build 目录，
+  保留诊断 7 天；清扫时删除到期且不活跃的目录。进程日志按启动批次保留，需要手动清理。
+- **保留 DSH home**：执行 `GGB_V3_DSH_TRACE=1 sh deploy/local/dev.sh`，
+  Worker 将纯文本 run 的 home 保留在 `.local/dsh-trace/<runId>/<turnId>/`。
+  `GGB_V3_DSH_TRACE_ROOT` 可指定该根目录，并覆盖 `GGB_V3_DSH_HOME_ROOT`。
+  此开关不提供完整模型请求或回答日志。带图片的 run 在确认清理后仍删除 home；保留的 home 需要手动清理。
 
 ### 使用 PostgreSQL
 

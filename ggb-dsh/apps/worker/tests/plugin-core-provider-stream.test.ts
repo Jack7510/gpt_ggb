@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { EVIDENCE_LIMITS } from '../src/plugin-core/evidence.js'
 import { ProviderToolStream, ProviderStreamEvidence } from '../src/plugin-core/provider-stream-evidence.js'
 import { apply } from '../src/plugin-core/provider-stream-plugin.js'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -16,6 +17,26 @@ function events(argumentsText: string) {
 function tool(capture: ProviderToolStream) { return (capture.snapshot().tools as Record<string, unknown>[])[0]! }
 
 describe('wire versus public SDK tool stream evidence', () => {
+  it('records request timing, context sizes and final numeric usage without retaining history', () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1000)
+    try {
+      const capture = new ProviderToolStream(1, [])
+      const messages = [{ role: 'user', content: 'PRIVATE_TASK' }, { role: 'assistant', content: 'PRIVATE_HISTORY' }]
+      capture.providerRequest({ system: [{ type: 'text', text: 'PRIVATE_SYSTEM' }], messages })
+      capture.wire({ type: 'message_start', message: { usage: {
+        input_tokens: 120, output_tokens: 0, cache_read_input_tokens: 100, raw: 'PRIVATE_USAGE',
+      } } })
+      capture.wire({ type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 25 } })
+      clock.mockReturnValue(1450)
+      capture.finish()
+      expect(capture.snapshot()).toMatchObject({ startedAt: new Date(1000).toISOString(),
+        finishedAt: new Date(1450).toISOString(), durationMs: 450, stopReason: 'end_turn',
+        usage: { input_tokens: 120, output_tokens: 25, cache_read_input_tokens: 100 },
+        providerRequest: { systemBytes: 14, messageCount: 2, messagesBytes: Buffer.byteLength(JSON.stringify(messages)),
+          messageBytesByRole: { user: Buffer.byteLength(JSON.stringify(messages[0])) } } })
+      expect(JSON.stringify(capture.snapshot())).not.toContain('PRIVATE_')
+    } finally { clock.mockRestore() }
+  })
   it.each(['\n', '\r\n'])('preserves Unicode and fragmented SSE with %j separators', separator => {
     const args = JSON.stringify({ request: { prompt: '画圆', plan: {} } })
     const text = events(args).map(event => `event: ${event.type}${separator}data: ${JSON.stringify(event)}${separator}${separator}`).join('')
@@ -70,7 +91,7 @@ describe('wire versus public SDK tool stream evidence', () => {
       fragmentMetadataLimited: true, assembly: 'identical' })
     expect(tool(capture).fragments).toHaveLength(256)
   })
-  it('keeps all stream chunks after 16 requests and tolerates diagnostic write failure', async () => {
+  it('keeps all stream chunks after the diagnostic budget and tolerates diagnostic write failure', async () => {
     const root = await mkdtemp(join(tmpdir(), 'stream-budget-'))
     const key = Symbol.for('ggb.providerStreamEvidence')
     const global = globalThis as unknown as Record<symbol, unknown>
@@ -82,13 +103,15 @@ describe('wire versus public SDK tool stream evidence', () => {
       const evidence = new ProviderStreamEvidence(path, [])
       global[key] = evidence
       apply({ on(_name, handler) { hook = handler } })
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < EVIDENCE_LIMITS.calls + 4; i++) {
         const chunks = []
         for await (const chunk of hook({}, async function* () { yield { index: i }; yield { done: true } })) chunks.push(chunk)
         expect(chunks).toEqual([{ index: i }, { done: true }])
       }
       expect(JSON.parse(await readFile(path, 'utf8'))).toMatchObject({ droppedRequests: 4 })
-      expect(JSON.parse(await readFile(path, 'utf8')).requests).toHaveLength(16)
+      const requests = JSON.parse(await readFile(path, 'utf8')).requests
+      expect(requests).toHaveLength(EVIDENCE_LIMITS.calls)
+      expect(requests[16]).toMatchObject({ request: 17, durationMs: expect.any(Number), finishedAt: expect.any(String) })
       const blocker = join(root, 'file')
       await writeFile(blocker, 'not a directory')
       global[key] = new ProviderStreamEvidence(join(blocker, 'stream.json'), [])

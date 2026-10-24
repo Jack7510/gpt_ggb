@@ -189,7 +189,7 @@ export class TurnEvidence {
     }
     const dataValue = bounded(selected, [...this.secrets], 8 * 1024)
     if (evidenceRecord(dataValue).truncated === true) this.payloadsTruncated += 1
-    const value = { method: notification.method.slice(0, 128),
+    const value = { observedAt: new Date().toISOString(), method: notification.method.slice(0, 128),
       sessionId: typeof notification.params.sessionId === 'string' ? notification.params.sessionId.slice(0, 128) : null,
       type: typeof event.type === 'string' ? event.type.slice(0, 128) : notification.method.slice(0, 128),
       data: dataValue }

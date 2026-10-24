@@ -18,7 +18,7 @@ export interface WorkerEnvConfig {
   dshWorkspaceRoot: string
   /** Root for per-run DSH homes; each run gets `<dshHomeRoot>/<runId>`. */
   dshHomeRoot: string
-  /** Debug-only trace root; `null` disables tracing and restores DSH-home deletion. */
+  /** Debug-only retained DSH-home root; `null` restores deletion after confirmed cleanup. */
   dshTraceRoot: string | null
   /** Server-owned provider configuration; the client can never override it (§7.2). */
   provider: 'deepseek-official'
@@ -74,6 +74,7 @@ export function loadWorkerEnvConfig(env: NodeJS.ProcessEnv = process.env): Worke
     'https://api.deepseek.com/v1', 'https://api.deepseek.com/v1/'].includes(configuredProviderUrl)
     ? 'https://api.deepseek.com/anthropic' : configuredProviderUrl
   const agentEngine = agentEngineSchema.parse(env.GGB_AGENT_ENGINE ?? 'plugin_core')
+  const dshTraceRoot = optionalString(env, 'GGB_V3_DSH_TRACE_ROOT')
   return {
     workerInstanceId: env.GGB_V3_WORKER_INSTANCE_ID ?? `worker-${process.pid}`,
     agentEngine,
@@ -84,10 +85,10 @@ export function loadWorkerEnvConfig(env: NodeJS.ProcessEnv = process.env): Worke
     migrationsDir: optionalString(env, 'GGB_V3_MIGRATIONS_DIR'),
     drainGraceMs: intEnv(env, 'GGB_V3_WORKER_DRAIN_MS', 15_000),
     dshWorkspaceRoot,
-    dshHomeRoot: env.GGB_V3_DSH_HOME_ROOT ?? '/tmp/ggb-dsh-home',
-    // Debug only. When set, every model request and raw answer is written here and the per-run DSH
-    // homes are kept instead of deleted in `finally`. Unset restores the shipped behaviour exactly.
-    dshTraceRoot: env.GGB_V3_DSH_TRACE_ROOT ?? null,
+    // Text-only runs retain their DSH home here when debugging is enabled. Image runs still delete it.
+    // Bounded tool/usage diagnostics always use pluginCoreOutputRoot; no raw transcript is recorded.
+    dshHomeRoot: dshTraceRoot ?? env.GGB_V3_DSH_HOME_ROOT ?? '/tmp/ggb-dsh-home',
+    dshTraceRoot,
     provider: 'deepseek-official',
     providerBaseUrl,
     pluginCoreMaxConcurrentRuns: intEnv(env, 'GGB_PLUGIN_CORE_MAX_CONCURRENT_RUNS', 1),

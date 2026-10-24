@@ -3,7 +3,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { createHash } from 'node:crypto'
 import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { redactEvidence } from './evidence.js'
+import { EVIDENCE_LIMITS, redactEvidence } from './evidence.js'
 
 const hash = (value: string) => createHash('sha256').update(value).digest('hex')
 const LIMIT = 32 * 1024
@@ -14,14 +14,18 @@ interface ToolWire {
 }
 interface RecordValue { [key: string]: unknown }
 
-/** One request records only tool input, never headers, reasoning or text output. */
+/** Retain timing, numeric usage, context sizes and tool input; omit headers, reasoning and text output. */
 export class ProviderToolStream {
+  private readonly startedAt = Date.now()
+  private finishedAt: number | null = null
+  private readonly usage: Record<string, number> = {}
   private sdkContract: RecordValue | null = null
   private wireContract: RecordValue | null = null
   private responseStatus: number | null = null
   sdkRequest(input: unknown): void { this.sdkContract = providerRequestFacts(input, 'sdk') }
   providerRequest(input: unknown): void { this.wireContract = providerRequestFacts(input, 'messages') }
   httpStatus(status: number): void { this.responseStatus = status }
+  finish(): void { this.finishedAt ??= Date.now() }
   private buffer = ''
   private decoder = new TextDecoder()
   private tools = new Map<number, ToolWire>()
@@ -51,6 +55,11 @@ export class ProviderToolStream {
   wire(event: RecordValue): void {
     const block = event.content_block as RecordValue | undefined
     const delta = event.delta as RecordValue | undefined
+    const usage = (event.type === 'message_start' ? (event.message as RecordValue | undefined)?.usage
+      : event.type === 'message_delta' ? event.usage : undefined) as RecordValue | undefined
+    for (const key of ['input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens']) {
+      if (Number.isSafeInteger(usage?.[key]) && Number(usage?.[key]) >= 0) this.usage[key] = Number(usage![key])
+    }
     if (event.type === 'message_stop') this.ended = true
     if (event.type === 'message_delta') this.stopReason = delta?.stop_reason
     const index = Number(event.index)
@@ -92,6 +101,10 @@ export class ProviderToolStream {
       return serialized.replace(/("[^"\n]*(?:api.?key|provider.?key|token|password|secret|credential|authorization|authentication)[^"\n]*"\s*:\s*)"(?:\\.|[^"\\])*(?:"|$)/giu, '$1"[redacted]"').slice(0, 8192)
     }
     return { request: this.request, sdkRequest: this.sdkContract, providerRequest: this.wireContract,
+      startedAt: new Date(this.startedAt).toISOString(),
+      finishedAt: this.finishedAt === null ? null : new Date(this.finishedAt).toISOString(),
+      durationMs: this.finishedAt === null ? null : this.finishedAt - this.startedAt,
+      usage: this.usage, stopReason: this.stopReason ?? null,
       responseStatus: this.responseStatus, wireMessageStop: this.ended, invalidFrames: this.invalidFrames,
       frameBytes: this.frameBytes, dropped: this.dropped, sdkFailure: this.failure,
       tools: [...this.tools.values()].map(tool => {
@@ -120,7 +133,7 @@ export class ProviderStreamEvidence {
   private droppedRequests = 0
   constructor(private readonly path: string, private readonly secrets: string[]) {}
   begin(): ProviderToolStream | undefined {
-    if (this.requests.length >= 16) { this.droppedRequests++; return undefined }
+    if (this.requests.length >= EVIDENCE_LIMITS.calls) { this.droppedRequests++; return undefined }
     const stream = new ProviderToolStream(this.requests.length + 1, this.secrets)
     this.requests.push(stream)
     return stream

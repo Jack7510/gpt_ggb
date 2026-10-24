@@ -23,6 +23,13 @@ describe('default installed composition', () => {
     expect(env).not.toHaveProperty('pluginCoreRunnerPath')
   })
 
+  it.each([undefined, '', '/tmp/ggb-debug-homes'])('uses the configured retained home root: %s', traceRoot => {
+    const config = loadWorkerEnvConfig({ GGB_V3_WORKER_SECRET: secret,
+      GGB_V3_DSH_HOME_ROOT: '/tmp/ggb-normal-homes', GGB_V3_DSH_TRACE_ROOT: traceRoot })
+    expect(config.dshTraceRoot).toBe(traceRoot || null)
+    expect(config.dshHomeRoot).toBe(traceRoot || '/tmp/ggb-normal-homes')
+  })
+
   it.skipIf(!pluginRoot)('routes API receipt-v1 through channel 8, installed SDK patch and a real plugin preflight (SDK mocked)', async () => {
     const temp = await mkdtemp(join(tmpdir(), 'default-installed-chain-'))
     const require = createRequire(join(pluginRoot!, 'package.json'))

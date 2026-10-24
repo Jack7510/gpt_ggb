@@ -22,7 +22,7 @@
     "build": "node tools/agent-reading-hints.mjs && tsc -b && pnpm --filter @ggb-copilot/client run bundle",
     "clean": "tsc -b --clean",
     "typecheck": "node tools/agent-reading-hints.mjs && tsc -b --pretty false",
-    "test": "node --test tools/build-ggb-manual-index.test.mjs tools/workspace-boundaries.test.mjs tools/provision-geogebra.test.mjs tools/plugin-core-release.test.mjs && vitest run",
+    "test": "node --test tools/build-ggb-manual-index.test.mjs tools/workspace-boundaries.test.mjs tools/provision-geogebra.test.mjs tools/plugin-core-release.test.mjs tools/local-dev.test.mjs && vitest run",
     "quality": "node tools/quality-check.mjs && node tools/quality-shared.mjs",
     "install:offline": "pnpm install --frozen-lockfile --offline --ignore-scripts",
     "check:client": "pnpm exec tsc -b apps/client && pnpm --filter @ggb-copilot/client run bundle && pnpm exec vitest run apps/client",

@@ -89,6 +89,7 @@ describe('bounded SDK evidence', () => {
     expect(value.calls[0].arguments.truncated).toBe(true)
     expect(value.calls[0].argumentsBytes).toBeGreaterThan(EVIDENCE_LIMITS.payloadBytes)
     expect(value.sdkEvents[0].data.usage.inputTokens).toBe(12)
+    expect(value.sdkEvents[0].observedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/u)
     expect(value.failure.message).toBe('last root cause')
     expect(text).not.toContain('secret-value')
     expect(Buffer.byteLength(text)).toBeLessThan(400 * 1024)

@@ -25,8 +25,8 @@ export function apply(ctx: Context): void {
       }
     } catch (error) { capture.failed(error); throw error }
     finally {
-      await evidence.scope.run(capture, () => iterator.return?.())
-      await evidence.flush()
+      try { await evidence.scope.run(capture, () => iterator.return?.()) }
+      finally { capture.finish(); await evidence.flush() }
     }
   })())
 }

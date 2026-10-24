@@ -11,6 +11,7 @@
 # restarts API/Worker on each rebuild, so editing a source file reloads without a manual
 # restart. Set GGB_V3_WATCH=0 for a one-shot start.
 set -eu
+umask 077
 
 cd "$(dirname "$0")/../.."
 
@@ -25,9 +26,11 @@ export PORT
 : "${GGB_V3_WORKER_SOCKET_PATH:=$(pwd)/.local/worker.sock}"
 : "${GGB_PLUGIN_CORE_TOOL_SOCKET:=$(pwd)/.local/plugin-core-tool.sock}"
 : "${GGB_V3_DSH_HOME_ROOT:=$(pwd)/.local/dsh-home}"
-# Debug only. GGB_V3_DSH_TRACE=1 records every model request and raw answer under .local/dsh-trace and
-# keeps the per-run DSH homes instead of deleting them. Unset leaves the shipped behaviour untouched.
-# Set GGB_V3_DSH_TRACE_ROOT directly to choose another location. Never enable this in production.
+# Local process logs and bounded per-run diagnostics are always retained.
+: "${GGB_V3_LOG_DIR:=$(pwd)/.local/logs/$(date -u +%Y%m%dT%H%M%SZ)-$$}"
+: "${GGB_PLUGIN_CORE_OUTPUT_ROOT:=$(pwd)/.local/plugin-core-runs}"
+# Debug only. Keep text-only DSH homes under this root; image-run homes are still deleted.
+# This switch does not record raw model requests or answers. Never enable it in production.
 if [ "${GGB_V3_DSH_TRACE:-0}" = "1" ]; then
   : "${GGB_V3_DSH_TRACE_ROOT:=$(pwd)/.local/dsh-trace}"
 fi
@@ -43,8 +46,11 @@ export GGB_AGENT_ENGINE GGB_PLUGIN_ROOT
 export GGB_V3_SERVER_PEPPER GGB_V3_WORKER_SECRET
 export GGB_V3_WORKER_SOCKET_PATH GGB_PLUGIN_CORE_TOOL_SOCKET
 export GGB_V3_DSH_HOME_ROOT GGB_V3_ALLOWED_ORIGIN GGB_V3_SQLITE_PATH GGB_V3_DSH_TRACE_ROOT
+export GGB_PLUGIN_CORE_OUTPUT_ROOT
 
-mkdir -p .local/dsh-home
+mkdir -p "$GGB_V3_LOG_DIR" "$GGB_V3_DSH_HOME_ROOT" "$GGB_PLUGIN_CORE_OUTPUT_ROOT"
+echo "[dev] process logs: $GGB_V3_LOG_DIR"
+echo "[dev] run diagnostics: $GGB_PLUGIN_CORE_OUTPUT_ROOT/<runId>"
 
 if [ "$watch" = "1" ]; then
   # `node --watch` restarts through SIGTERM and the API drains for
@@ -56,7 +62,10 @@ fi
 
 # Build once up front: the first `tsc -b --watch` build is asynchronous and would
 # otherwise race the processes that load `lib/`.
-pnpm exec tsc -b
+if ! pnpm exec tsc -b > "$GGB_V3_LOG_DIR/build.log" 2>&1; then
+  cat "$GGB_V3_LOG_DIR/build.log" >&2
+  exit 1
+fi
 
 worker_pid=""
 api_pid=""
@@ -75,16 +84,16 @@ trap cleanup EXIT
 trap 'exit 0' TERM INT
 
 if [ "$watch" = "1" ]; then
-  pnpm exec tsc -b --watch --preserveWatchOutput &
+  pnpm exec tsc -b --watch --preserveWatchOutput > "$GGB_V3_LOG_DIR/tsc.log" 2>&1 &
   tsc_pid=$!
-  node --watch apps/worker/lib/main.js &
+  node --watch apps/worker/lib/main.js >> "$GGB_V3_LOG_DIR/worker.log" 2>&1 &
   worker_pid=$!
-  node --watch apps/api/lib/main.js &
+  node --watch apps/api/lib/main.js >> "$GGB_V3_LOG_DIR/api.log" 2>&1 &
   api_pid=$!
 else
-  node apps/worker/lib/main.js &
+  node apps/worker/lib/main.js >> "$GGB_V3_LOG_DIR/worker.log" 2>&1 &
   worker_pid=$!
-  node apps/api/lib/main.js &
+  node apps/api/lib/main.js >> "$GGB_V3_LOG_DIR/api.log" 2>&1 &
   api_pid=$!
 fi
 

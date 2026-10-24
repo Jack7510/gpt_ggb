@@ -5,6 +5,10 @@ await app.start()
 console.log(
   `[worker] ${app.config.workerInstanceId} listening on ${app.config.socketPath} (plugin-core concurrency ${app.config.pluginCoreMaxConcurrentRuns})`,
 )
+console.log(`[worker] run diagnostics: ${app.config.pluginCoreOutputRoot}/<runId> (7-day terminal retention)`)
+if (app.config.dshTraceRoot !== null) {
+  console.log(`[worker] retained text-only DSH homes: ${app.config.dshHomeRoot}/<runId>/<turnId>`)
+}
 
 let shuttingDown = false
 async function shutdown(signal: string): Promise<void> {
