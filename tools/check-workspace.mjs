@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const allowed = new Set(['check', 'check:fast', 'check:client', 'check:api', 'check:worker',
-  'check:package', 'typecheck', 'test', 'quality'])
+  'typecheck', 'test', 'quality'])
 
 /**
  * Use the workspace's existing script as the sole source of check order.
@@ -19,7 +19,7 @@ const allowed = new Set(['check', 'check:fast', 'check:client', 'check:api', 'ch
 export function checkPlan(workspace, script, args, scripts) {
   if (workspace !== 'ggb-dsh') throw new Error('Unknown workspace')
   if (!allowed.has(script) || typeof scripts[script] !== 'string') throw new Error('Unknown offline check')
-  if (args.length && !['test', 'check:package'].includes(script)) throw new Error('This check accepts no extra arguments')
+  if (args.length && script !== 'test') throw new Error('This check accepts no extra arguments')
   return scripts[script].split(' && ').map((command, index, commands) => {
     // Current check scripts use simple words only. Reject new shell syntax before running any step.
     if (!/^[a-zA-Z0-9_./:@= -]+$/.test(command)) throw new Error('Unsupported check syntax; use the workspace script directly')
@@ -65,7 +65,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   try {
     const [workspace, script = 'check', ...args] = process.argv.slice(2)
     if (workspace !== 'ggb-dsh') {
-      throw new Error('Usage: node tools/check-workspace.mjs ggb-dsh [offline-check] [test-paths|package]')
+      throw new Error('Usage: node tools/check-workspace.mjs ggb-dsh [offline-check] [test-paths]')
     }
     const cwd = resolve(root, workspace)
     const { scripts } = JSON.parse(readFileSync(resolve(cwd, 'package.json'), 'utf8'))

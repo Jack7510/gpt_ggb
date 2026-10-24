@@ -12,7 +12,6 @@
   },
   "dependencies": {
     "@ggb-copilot/application": "workspace:*",
-    "@ggb-copilot/geometry-geogebra": "workspace:*",
     "katex": "0.18.9",
     "markdown-it": "14.3.2",
     "markdown-it-texmath": "1.0.0",

@@ -46,20 +46,8 @@ function checkDependencyDirection(files) {
   }
 }
 
-/** @returns {void} Validates minimum M0 evaluation coverage and reference assertions. */
-function checkEvaluation() {
-  const suite = JSON.parse(readFileSync(resolve(root, 'evaluation/geometry-m0-v1.json'), 'utf8'))
-  const required = ['circumcenter', 'rightTriangle', 'midpoint', 'parallel', 'perpendicular', 'angleBisector', 'tangent', 'ambiguity', 'degenerate']
-  const categories = new Set(suite.cases.map(value => value.category))
-  for (const category of required) if (!categories.has(category)) throw new Error(`missing evaluation category: ${category}`)
-  for (const value of suite.cases) {
-    if (!value.id || !value.prompt || !Array.isArray(value.assertions)) throw new Error(`invalid evaluation case: ${JSON.stringify(value)}`)
-  }
-}
-
 const files = trackedFiles()
 checkSecrets(files)
 checkMarkdown(files)
 checkDependencyDirection(files)
-checkEvaluation()
 process.stdout.write(`quality checks passed for ${String(files.length)} workspace files\n`)

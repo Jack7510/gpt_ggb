@@ -5,7 +5,6 @@
 | 文件 | 用途 |
 | --- | --- |
 | `plugin-core-minimal-v1.cases.json` | plugin-core 真实构图案例。`plugin-core-batch.mjs` 读取 prompt 并逐例请求本地 API；案例带出处与核验要点，不含 Key、runToken、画布 XML 或用户数据。 |
-| `geometry-m0-v1.json` | 共享几何内核的 M0 覆盖集合；`tools/quality-check.mjs` 校验分类与断言结构。 |
 | 安装式插件 SDK 检查 | 复用工作区 Worker 的 SDK 和统一 lockfile；入口为 `tools/verify-installed-plugin-sdk.mjs`。运行与边界见 [SDK 兼容性](../docs/dsh-sdk-compatibility.md#安装式插件的隔离验证组合)。 |
 
 ## plugin-core 案例

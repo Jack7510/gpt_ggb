@@ -45,12 +45,6 @@ export function deliveryArtifactPath(sessionId: string, runId: string): string {
   return `${session}/deliveries/${run}.ggb`
 }
 
-/** Private, transaction-scoped receipt body retained until Server settlement. */
-export function receiptArtifactPath(sessionId: string, transactionId: string, phase: 'snapshot' | 'finalization'): string {
-  const transaction = transactionId.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 64)
-  return `${canvasArtifactDirectory(sessionId)}/receipts/${transaction}.${phase}.json`
-}
-
 /** Stable, traversal-safe OPFS directory name for a locally generated Session id. */
 export function canvasArtifactDirectory(sessionId: string): string {
   return sessionId.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 64)

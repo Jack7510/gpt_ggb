@@ -25,6 +25,7 @@ test('uses existing script order and forwards test arguments without shell inter
     ['exec', 'vitest', 'run', 'a test.ts', '$(false)'])
   assert.throws(() => checkPlan('ggb-shared', 'test', [], {}), /workspace/)
   assert.throws(() => checkPlan('elsewhere', 'test', [], {}), /workspace/)
+  assert.throws(() => checkPlan('ggb-dsh', 'check:package', [], { 'check:package': 'node old.mjs' }), /offline/)
   assert.throws(() => checkPlan('ggb-dsh', 'verify:plugin-core', [], {}), /offline/)
   assert.throws(() => checkPlan('ggb-dsh', 'check', ['--skip'], { check: 'node check.mjs' }), /arguments/)
   assert.throws(() => checkPlan('ggb-dsh', 'check', [], { check: 'node ok.mjs && node bad.mjs; false' }), /syntax/)

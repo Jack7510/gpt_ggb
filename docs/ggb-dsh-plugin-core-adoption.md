@@ -126,8 +126,8 @@ apps/worker
 
 保留：
 
-- `app-protocol`、`geometry-contract`、`geometry-geogebra`、`geometry-validation`、`knowledge`
-  中的共享能力（仅删除无消费者部分）。
+- Client 的画布 XML 归一化与 applet 端口；实现位于 Client。无产品消费者的旧几何编译、
+  校验与知识检索包及其专用测试已删除，相关能力由安装式插件提供。
 - 迁移文件 001–016 作为历史；启动不应用、不创建 Native 表。
 - 插件包内的 `skills/ggb-construction/worker.md`、服务端 patch、三工具与评测案例。
   宿主旧 profile、重复工具包和专属 CLI 包装器已删除。

@@ -16,11 +16,11 @@ Agent 的修改、验证与安全工作规则见 [AGENTS.md](../AGENTS.md)。
 
 ## 依赖更新与增量构建
 
-包边界见 [共享内核技术设计](../docs/ggb-shared-tech.md)；本节只说明修改后如何更新构建产物。
+包边界见 [根 README 代码仓结构](../README.md#代码仓结构)；本节只说明修改后如何更新构建产物。
 
 内部源码修改不需要打包、修改包版本或重新安装。`tsc -b` 按 project references 先构建依赖，
-再构建消费者。`dev.sh` 监听整个构建图；共享包的 `lib/` 变化会触发使用该模块的 API/Worker 重启。
-只启动 Client 时，另运行 `pnpm exec tsc -b --watch`，使共享包输出保持更新。
+再构建消费者。`dev.sh` 监听整个构建图；内部包的 `lib/` 变化会触发使用该模块的 API/Worker 重启。
+只启动 Client 时，另运行 `pnpm exec tsc -b --watch`，使内部包输出保持更新。
 
 修改依赖声明后，在本目录运行 `pnpm install --no-frozen-lockfile` 并提交更新后的 lockfile。
 
@@ -62,11 +62,10 @@ Agent 的修改、验证与安全工作规则见 [AGENTS.md](../AGENTS.md)。
 
 | 命令 | 用途 |
 | --- | --- |
-| `pnpm run check` | `build`、共享包 lint、Node/Vitest 测试、质量检查 |
+| `pnpm run check` | `build`、Node/Vitest 测试、质量检查 |
 | `pnpm run check:fast` | `typecheck` + 测试 |
 | `pnpm run check:client` | Client 构建、bundle 与测试 |
 | `pnpm run check:api` / `check:worker` | 对应应用构建与测试 |
-| `pnpm run check:package <name>` | 单个共享包的 typecheck、lint、测试与质量检查 |
 | `pnpm run verify:plugin-core` | 对已启动的本地 API 逐例发送 plugin-core 案例（付费，需授权与 Key） |
 | `pnpm run verify:plugin-core:integrated` | 启动隔离 API/Worker 后跑批处理 |
 | `pnpm run verify:plugin-core:pwa:mock --authorized` | mock Harness + 真实 PWA/GeoGebra 全链；需完整 runtime，不调用 Provider |
@@ -198,4 +197,3 @@ API/Worker 不读取环境变量来选择模型；Provider 地址由服务端固
 - [插件核心切换：当前状态与交接](../docs/ggb-dsh-plugin-core-cutover-handoff.md)
 - [统一 Backlog](../docs/ggb-dsh-backlog.md)
 - [部署指南](../docs/deploy-dsh.md)
-- [共享内核技术设计](../docs/ggb-shared-tech.md)

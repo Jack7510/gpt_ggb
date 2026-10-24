@@ -40,7 +40,7 @@ ggb-dsh-server container (non-root)
 4. 准备两个不同的 32-byte 随机 secret 文件，权限为 `0600`：
    `server-pepper`、`worker-secret`。内容必须是 64 位小写十六进制。
 5. 在一个可审计的 release checkout 中构建统一的 `ggb-dsh/` workspace。内部包使用本地链接，
-   外部依赖由 `pnpm-lock.yaml` 固定。镜像必须使用同一 Git revision 的应用、共享领域包和 lockfile。
+   外部依赖由 `pnpm-lock.yaml` 固定。镜像必须使用同一 Git revision 的应用、内部包和 lockfile。
 6. 确认固定 GeoGebra 版本的同源分发许可适用于目标部署；商业用途须先完成独立许可审查。
 7. 供应 plugin-core runtime 与固定 GeoGebra runtime；缺资源时 Worker 在监听前失败。
 

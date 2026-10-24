@@ -1,4 +1,3 @@
-import type { RestrictedGeoGebraApiV1 } from '@ggb-copilot/geometry-geogebra/renderer'
 import { applyCanvasViews, parseCanvasViews, readCanvasViews, type CanvasViews } from './view-settings.js'
 import { digestCanonicalXml } from './snapshot.js'
 
@@ -224,7 +223,12 @@ export interface DirectAppletPortOptions {
   codebasePath?: string
 }
 
-interface GeoGebraAppletApi extends RestrictedGeoGebraApiV1 {
+interface GeoGebraAppletApi {
+  evalCommand(command: string): boolean
+  getXML(): string
+  getObjectType?(label: string): string
+  getDefinitionString?(label: string): string
+  getCommandString?(label: string): string
   remove?(): void
   getVersion(): string
   getBase64(callback: (value: string) => void): void

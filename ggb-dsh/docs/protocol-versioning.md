@@ -29,7 +29,6 @@
 
 | 边界 | 版本 | 说明 |
 | --- | --- | --- |
-| 几何领域 JSON | `schemaVersion: 1` | 几何对象、计划、验证程序与错误码 |
 | Client ↔ API plugin-core run | `schemaVersion: 1` | HTTP body、run view、SSE 事件 |
 | API ↔ Worker channel | `protocolVersion: 8` | 独立 run 连接与统一字节上限；有界 SDK 模型步号与工具进度帧不结束结果等待；固定交付契约；结果携带清理确认及可选可信回执；cancel ack 仅表示请求已接收 |
 | DSH 工具 ↔ Worker | `protocolVersion: 3` | 解析、认证和工具客户端由安装包公开 schemas 提供；分段草稿与已检查版本引用；不接受协议 1/2 |
@@ -46,7 +45,7 @@
 
 ## 标识规则
 
-应用生成的标识使用固定前缀加 UUID v4：`run_`、`canvas_`、`obj_` 等。显示标签不作为对象标识。
+应用生成的标识使用固定前缀加 UUID v4：`run_`、`canvas_` 等。显示标签不作为对象标识。
 TypeScript 使用 branded type 区分不同标识；JSON 接收端先用所属 Zod schema 验证字符串。
 
 ## 兼容性
@@ -57,8 +56,8 @@ TypeScript 使用 branded type 区分不同标识；JSON 接收端先用所属 Z
 
 ## Dev Note
 
-几何计划、事务和观察结果的完整字段以 `packages/geometry-contract/src` 的当前 schema 为准；
-不要从历史文档或旧夹具推定字段。
+宿主的 run 与 channel 字段以 `packages/application/src` 的当前契约为准。
+构图与执行字段由安装式插件的公开 schema 定义；不要从历史文档或旧夹具推定字段。
 
 版本 8 不接受版本 7 及更早握手；握手应答也必须声明版本 8。API 停止后继续等待最终结果；未取得清理确认时不得结算 cancelled。
 `deliveryContract=receipt-v1` 在创建 run 时持久化，缺回执或与 Worker 契约不匹配时失败，不回退到 legacy。

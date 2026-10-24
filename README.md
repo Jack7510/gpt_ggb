@@ -55,7 +55,6 @@ Plugin-core Server
 | `ggb-dsh/apps/worker/` | plugin-core runner、DSH 执行、受限工具网关和内部通信。 |
 | `ggb-dsh/packages/application/` | 跨进程契约、错误码、toolkit 协议与摘要工具。 |
 | `ggb-dsh/packages/run-persistence/` | plugin-core store 和数据库 schema admission。 |
-| `ggb-dsh/packages/` 中的 knowledge、geometry 等领域包 | 浏览器安全的共享知识、几何契约、编译和校验能力。 |
 | `ggb-dsh/vendor/` | 插件发行包、文件摘要及完整兼容组合锁。 |
 | `ggb-dsh/deploy/` | 本地启动、部署和迁移资产。 |
 | `docs/` | 设计、决策、工作清单、验收与部署资料。 |
@@ -64,7 +63,9 @@ Plugin-core Server
 
 `ggb-plugins` 是独立插件依赖。开发默认链路从固定 TGZ 安装，不依赖源码 checkout 或桌面插件缓存。
 宿主只通过公开入口加载四工具、Worker Skill 和执行器；新 run 固定使用可信回执交付。
-共享领域包与服务端 runtime 包保持独立边界；详见 [共享内核设计](docs/ggb-shared-tech.md)。
+`application` 通过 `./browser` 导出浏览器可用契约；Client 不导入服务端入口。
+`run-persistence` 只供 API/Worker 使用。内部依赖使用 `workspace:*` 和包公开导出，
+TypeScript project references 与直接依赖对应。构图 schema、编译、校验和手册检索由安装式插件拥有。
 
 ## 技术栈
 
@@ -74,7 +75,7 @@ Plugin-core Server
 | 服务端 | Node.js、TypeScript、DeepSeek Harness、plugin-core；HTTP/SSE 与 Unix socket。 |
 | 持久化 | 本地开发默认 SQLite，生产使用 PostgreSQL；Memory store 用于测试。 |
 | 插件执行 | Playwright Chromium、GeoGebra runtime、受限工具协议。 |
-| 开发与验证 | pnpm workspace、TypeScript project references、Vitest、Node test runner、ESLint。 |
+| 开发与验证 | pnpm workspace、TypeScript project references、Vitest、Node test runner。 |
 
 版本以 [运行时配置](ggb-dsh/config/runtime-versions.json)、各包的 `package.json` 和 lockfile 为准，
 本文不重复固定版本号。
@@ -123,10 +124,7 @@ node tools/check-workspace.mjs ggb-dsh test apps/client/tests/plugin-core-runtim
 # 按模块检查：可选 check:client、check:api、check:worker
 node tools/check-workspace.mjs ggb-dsh check:worker
 
-# 浏览器安全共享包及受影响消费者分别检查
-node tools/check-workspace.mjs ggb-dsh check:package geometry-validation
-
-# 全量：构建、共享包 lint、全部测试与质量检查
+# 全量：构建、全部测试与质量检查
 node tools/check-workspace.mjs ggb-dsh check
 ```
 
@@ -144,7 +142,7 @@ node tools/check-workspace.mjs ggb-dsh check
 | 当前 release、证据和换机步骤 | [切换交接](docs/ggb-dsh-plugin-core-cutover-handoff.md) |
 | 剩余工作、根因和退出条件 | [统一 Backlog](docs/ggb-dsh-backlog.md) |
 | 发布、迁移、运维和回滚 | [部署指南](docs/deploy-dsh.md) |
-| 包边界与 workspace 构建规则 | [共享内核技术设计](docs/ggb-shared-tech.md)、[共享内核 ADR](docs/adr/001-shared-kernel-two-runtimes.md) |
+| 包边界与 workspace 构建规则 | [代码仓结构](#代码仓结构)、[工作区构建说明](ggb-dsh/README.md#依赖更新与增量构建) |
 
 README 维护项目结构、技术栈和架构概览。专题文档维护精确契约，Backlog 维护进度与验收状态。
 README 和 AGENTS 引用这些资料，不复制第二份契约或进度表。

@@ -1,4 +1,3 @@
-import { z } from 'zod'
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { RunToken } from './ids.js'
 
@@ -30,10 +29,3 @@ export function verifiersEqual(a: string, b: string): boolean {
 export function bodyDigest(body: string): string {
   return createHash('sha256').update(body).digest('hex')
 }
-
-/** Server-only authorization/idempotency facts; parsing never consumes a runtime checkpoint. */
-export const runAccessFactsV1Schema = z.object({
-  tokenVerifier: z.string().min(1).max(128),
-  requestDigest: z.string().min(1).max(128),
-})
-export type RunAccessFactsV1 = z.infer<typeof runAccessFactsV1Schema>
