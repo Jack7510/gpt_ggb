@@ -89,7 +89,9 @@ function checkSnapshot(observed, installation, workerSkill) {
   const tools = new Map(observed.modelTools.map(tool => [tool.name, tool.parameters]));
   assert.deepEqual(tools.get('ggb_check').required, ['revision']);
   assert.deepEqual(tools.get('ggb_build').required, ['checkedRequestId']);
-  assert.equal(tools.get('ggb_request').properties.items.maxItems, 8);
+  assert.equal(tools.get('ggb_request').properties.requestText.type, 'string');
+  assert.deepEqual(tools.get('ggb_request').required, ['requestText']);
+  assert.equal(tools.get('ggb_inspect').properties.references.maxItems, 6);
   assert.equal(observed.providerKeyPresent, false);
   assert.deepEqual(observed.networkAttempts, []);
 }

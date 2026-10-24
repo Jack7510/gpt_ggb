@@ -15,7 +15,7 @@
 模型请求携带的工具表。缺少工具、出现其他工具或重复工具时，在调用 Provider 前拒绝本轮。
 此检查不依赖流诊断采集器；诊断缺失或限额不会解除权限限制。
 
-有无基线只决定能否调用 `ggb_inspect({})`。`ggb_inspect({reference: topic})` 在两种情况下均可读取固定参考，
+有无基线只决定能否调用 `ggb_inspect({})`。`ggb_inspect({reference: topic})` 或 `ggb_inspect({references: topics})` 在两种情况下均可读取固定参考，
 宿主提示不能以无基线为理由禁止所有 inspect 调用。
 
 ## 安装式插件的隔离验证组合
@@ -25,8 +25,8 @@
 | SDK Client / runtime / tools | `0.2.1-rc.2`；Worker、application 和 workspace overrides 一致 |
 | Cordis / group / pi-ai | `4.0.5` / `1.0.5` / `1.3.0`；完整传递依赖由 workspace lock 固定 |
 | 插件 | `ggb-plugins-dsh@0.8.3`；来自本地修改源码的 development-build，尚未发布 |
-| 发行包 SHA-256 | `bf893c09090bfa4391378746530a0f74f96383b9deb067a8a3181365cc96580b` |
-| Worker Skill SHA-256 | `3b1142c087949e52f61fed562defb0feb42abdc7e8299319037fffbb7ad33afa` |
+| 发行包 SHA-256 | `fa44435dffe07dbe1804b56247bde3dd094dbee8eba69b20417109351a1494b2` |
+| Worker Skill SHA-256 | `af8f64194fc86547c2891dabc92422aecaee4741e769e06fa5595f2be505b5d3` |
 | 工具 / executor / receipt / API↔Worker | 协议 `3` / envelope `3` / schema `2` / channel `8`；桌面 CLI 保持 envelope `1` |
 | 插件 GeoGebra | `5.4.932.1`；归档 SHA-256 见 vendor lock |
 | Playwright | `1.64.1`；执行器选择该包管理的 Chromium，不依赖系统 Chrome |
@@ -84,7 +84,10 @@ SDK 子进程不继承凭据，测试 preload 拒绝 HTTP、fetch 和 socket 网
 未知版本、不同字节或不同补丁结果均拒绝，不回退到原始引擎。
 
 补丁 asset 和 manifest 均以同目录临时文件写入，先同步并关闭文件，再原子 rename。
-POSIX 还同步父目录。写入、文件同步或 rename 失败不以部分内容替换旧文件。
+POSIX 还同步父目录。rename 之前失败保持旧目标，任何路径都不以部分内容替换目标。
+rename 后父目录打开或同步失败时，`AtomicFileDurabilityError` 表示 `committed:true`、
+`durabilityConfirmed:false`、`phase:parent-sync`：新文件已可见，崩溃持久性未确认。
+调用方不得把它解释为“完全没有写入”。不做自动回滚；恢复后核对实际摘要和完整发布组合。
 manifest 更新失败后，旧 manifest 与已完整修复的 asset 可以重新供应；两文件之间不承诺跨文件原子事务。
 API 提供 Client 静态资源时，在监听前比较固定配方、manifest 全部审计字段和实际 asset SHA-256，
 拒绝原始、截断或符号链接逃逸的 asset。单纯修改 manifest 不能绕过准入。
@@ -103,16 +106,48 @@ GGB_RUNTIME_ARCHIVES=/absolute/archives GGB_RUNTIME_EVIDENCE=/absolute/evidence 
 归档目录中的文件名必须是 `geogebra-5.4.932.1.zip`。两条供应命令仍检查官方 ZIP 摘要。
 升级旧 Client 时先归档旧 public runtime 和 manifest，或在新 checkout 供应；供应器不覆盖版本冲突目录。
 PWA 缓存升级到 `ggb-runtime-v3`，激活时删除 v1 和 v2，首次获取 runtime 绕过旧 HTTP cache。
-验收使用实际 API 静态层、Client applet 文档和构建后的 Service Worker；先激活旧 v1 Worker，
+验收使用实际 API 静态层、Client applet 文档和构建后的 Service Worker；分别激活旧 v1、历史真实 v2 Worker，
 验证原始引擎失效，再升级并验证缓存字节、依赖、样式、鼠标拖动、缩放和 GGB 重载。
 
 宿主 CI 的 `runtime-release` job 从空默认安装开始，验证正式 vendor TGZ、doctor、真实官方 ZIP、
 Client 供应和浏览器升级；证据通过 artifact 保存。插件 CI 另执行原始/修复引擎及其他圆锥曲线对照。
+Client 回归逐项验证 p/d 标签 true→false、有限路径参数及隐藏状态的持久化。
+`verify:plugin-core:pwa:mock --authorized` 使用最终安装包的真实 GeoGebra，
+在 PWA 实际交付 iframe 验证 Directrix 动点、隐藏标签、重载、鼠标拖动和缩放，
+并检查 SSE 重连、下载摘要和下一轮基线；只替换 Harness，不调用真实 Provider。CI 保存该证据。
 普通 `pnpm test` 包含模拟供应反例，不下载资源或调用真实 Provider。上述真实验收需浏览器授权。
 
 本地同步新的 development-build 时，先在插件仓库执行 `pnpm pack:dsh`，再在宿主运行
 `node tools/update-plugin-core.mjs --tgz /absolute/package.tgz --source /absolute/plugin-checkout`。
 此命令同步 TGZ、文件摘要、源码快照、审计配方和 runtime 组合，不发布 npm 包或部署生产。
+
+## 固定参考批量读取与 check 修复反馈
+
+`ggb_inspect` 的 schema 由插件提供。参数为空时只检查宿主附带的基线；没有基线则拒绝。
+`reference` 读取单个固定主题；`references` 一次读取 1–6 项。两参数互斥，拒绝未知字段、
+空数组、路径、URL 和未知主题；按首次出现顺序去重。新选项是协议 3 的加法扩展，四工具白名单不变。
+宿主启动要求安装包公开 `loadReferences`，旧安装缺失该入口时拒绝，不把新参数发到旧插件。
+
+```json
+{"references":["request","program","verification"]}
+```
+
+结果为 `{references:[{topic,content}]}`。插件先验证整批主题，再读取当前固定安装包的完整文本。
+结果对象经 JSON 序列化后的 UTF-8 字节上限为 24 KiB，包含转义和元数据；认证通道整帧仍限 256 KiB。
+超限返回普通 `reference_limit_exceeded`，正文不截断、不部分成功，模型可选择更少主题重读。
+读取不启动浏览器、不消费 build 次数、不改变草稿版本或 accepted build，权限随当前 turn 一起撤销。
+
+Worker 按需合并 2–3 个相关主题，不能每题固定读取全部六项。批量减少往返，但不承诺真实 Provider
+耗时、用量或成本的固定降幅；相同内容的字节量并不因合并而消失。
+
+check 的主语数量错误返回 `invalid_input`，details 包含 requirementId、派生 checkId、kind、
+有界 subjects、actualSubjectCount、expectedMinSubjects 和 expectedMaxSubjects。
+固定数量时另含 expectedSubjectCount。CLI、executor、宿主认证通道和模型投影保留这些字段。
+最小谓词示例只在插件 verification 参考中维护；checkId 由工具生成，不能当作请求字段提交。
+`pointOn` 只检查位置；已有 `dependsOn` 检查传递依赖，不能用固定坐标的初始重合替代动态关系。
+
+发行更新必须同时写 TGZ、sidecar、锁与 runtime 配置。`verify:plugin-core:release`、默认测试准入和 CI
+核对四者摘要；更新中断留下混合组合时拒绝继续供应。多文件更新不承诺跨文件原子事务。
 
 ## Provider 与升级边界
 

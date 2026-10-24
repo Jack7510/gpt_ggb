@@ -237,6 +237,41 @@ describe('plugin-core PWA integration', () => {
       await vi.waitFor(async () => expect((await runtime.view(id)).title).toBe('圆 c=Circle(O,3)，圆心 O=(0,0)'))
     } finally { runtime.dispose() }
   })
+  it.each([{ manual: false, snapshot: false }, { manual: false, snapshot: true }, { manual: true, snapshot: true }])(
+    'saves the image question before its summary, names the first topic and respects manual names (%j)', async ({ manual, snapshot }) => {
+    const { runtime, fetchMock, db } = harness()
+    const question = '抛物线 y²=4x 的焦点为 F，A 为准线上一点，作 FA 的中垂线。'
+    const completed = { ...view('completed'), finalResponse: `### 原题（图片识别）\n\n> ${question}\n\n构图完成。` }
+    fetchMock.mockImplementation(async (input, init) => {
+      if (init?.method === 'POST') return new Response(JSON.stringify({ runId, phase: 'accepted' }))
+      if (String(input).includes('/artifacts/')) return new Response(Buffer.from('PKfake'))
+      if (String(input).includes('/events')) return new Response(snapshot ? sseFrame('plugin_core.ready', {
+        schemaVersion: 1, type: 'plugin_core.ready', generation: 'g', run: completed, cursor: 2, terminal: true,
+      }) : sseFrame('plugin_core.delivery', {
+        schemaVersion: 1, type: 'plugin_core.delivery', eventId: 2, occurredAt: completed.createdAt,
+        runId, finalResponse: completed.finalResponse, delivery: completed.delivery,
+        usage: completed.usage, durationMs: completed.durationMs,
+      }))
+      return new Response(JSON.stringify(completed))
+    })
+    try {
+      await runtime.setProviderKey('fake')
+      const id = await runtime.createSession()
+      if (manual) await runtime.renameSession(id, '我的课件')
+      await runtime.sendMessage(id, '帮我完成这道题', { mediaType: 'image/png',
+        dataBase64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=' })
+      await vi.waitFor(async () => expect((await runtime.view(id)).title).toBe(manual ? '我的课件' : question.slice(0, 32)))
+      await vi.waitFor(async () => expect((await db.getAll<{ role: string; content: string }>('messages'))
+        .filter(m => m.role === 'final_report')).toHaveLength(1))
+      const reports = (await db.getAll<{ role: string; content: string }>('messages')).filter(m => m.role === 'final_report')
+      expect(reports[0]?.content.startsWith(`### 原题（图片识别）\n\n> ${question}`)).toBe(true)
+      fetchMock.mockRejectedValue(new Error('offline'))
+      await runtime.openSession(await runtime.createSession())
+      const restored = await runtime.openSession(id)
+      expect(restored.messages.some(m => m.content.includes(question))).toBe(true)
+      expect(restored.title).toBe(manual ? '我的课件' : question.slice(0, 32))
+    } finally { runtime.dispose() }
+  })
   it('persists the accepted construction record per run and restores it when switching sessions offline', async () => {
     const { runtime, fetchMock, db } = harness()
     const binding = { runId, turnId: '11111111-1111-4111-8111-111111111111', requestId: '22222222-2222-4222-8222-222222222222',

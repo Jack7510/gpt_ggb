@@ -61,7 +61,7 @@ run-persistence。
 - `geometry-geogebra` 的 compiler 只接受通过 schema 的结构化计划；受控查询在隔离 applet 中
   执行，不接受任意脚本。Client 只用 renderer 的 canonical XML 摘要与 applet 端口。
 - `geometry-validation` 做静态能力和断言校验；真实执行与核验由 plugin-core runner 负责。
-- 二维 Cartesian 视图、固定 GeoGebra 5.4.929.3 runtime 与同源分发要求不变。
+- 二维 Cartesian 视图、由 runtime-versions.json 固定的 GeoGebra runtime 与同源分发要求不变。
 
 ## 7. 持久化与安全边界
 

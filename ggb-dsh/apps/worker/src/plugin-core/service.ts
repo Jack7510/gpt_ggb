@@ -1,4 +1,5 @@
 import { noDeliveryMessage } from './build-failure-summary.js'
+import { prependImageProblem } from './image-problem.js'
 import type { PluginCoreBuildFailure, PluginCoreImage } from '@ggb-copilot/application'
 import { releaseRunFiles } from './retention.js'
 import { PluginCoreExecutionState } from './execution-state.js'
@@ -147,6 +148,7 @@ export class PluginCoreService {
       const epoch = await this.state.acquireEpoch(input.runId)
       ownsFiles = true
       this.state.invalidate(input.runId)
+      if (input.image !== undefined) this.state.setImagePrompt(input.runId, input.prompt)
       await rm(join(this.options.outputRoot, input.runId, 'terminal.json'), { force: true })
       const prepared = await this.prepareBase(input.runId, input.base ?? null)
       if (!prepared.ok) {
@@ -324,7 +326,8 @@ export class PluginCoreService {
     const delivery = this.state.candidate(runId)
     const details = this.state.missingDeliveryFailure(runId)
     const empty = finalResponse.trim().length === 0 && diagnostics.toolCalls === 0 && details.kind === 'not_built'
-    return { finalResponse: this.bounded(finalResponse), delivery, usage, diagnostics,
+    return { finalResponse: this.bounded(prependImageProblem(finalResponse,
+      delivery === null ? null : this.state.imageProblem(runId))), delivery, usage, diagnostics,
       modelId, durationMs, modelCalls: calls, modelCallsTruncated: callsTruncated,
       cleanup: { runId, confirmed: !this.state.unsafe(runId), completedAt: new Date().toISOString() },
       error: delivery === null ? empty

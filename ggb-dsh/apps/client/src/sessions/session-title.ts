@@ -23,6 +23,8 @@ export function titleFromPrompt(prompt: string, hasImage: boolean, locale: Prese
  */
 export function titleFromFinalReport(response: string, constructionText: string | undefined,
   locale: PresentationLocale): string {
+  const problem = imageProblemFromReport(response)
+  if (problem) return clip(cleanText(problem), locale)
   const candidates = response.split(/\r?\n/u).map(cleanText).filter(Boolean)
   const topic = candidates.find(line => GEOMETRY_TOPIC.test(line))
   if (topic !== undefined) {
@@ -38,6 +40,13 @@ export function titleFromFinalReport(response: string, constructionText: string 
     if (title.length > 0 && !GENERIC_IMAGE_TITLES.has(title)) return title
   }
   return ''
+}
+
+/** Read only the host-generated first section; model prose is not an image-source marker. */
+export function imageProblemFromReport(response: string): string {
+  const match = /^### (?:原题（图片识别）|Original problem \(image transcription\))\r?\n\r?\n((?:>[^\r\n]*(?:\r?\n|$))+)/u.exec(response)
+  return match?.[1]?.split(/\r?\n/u).filter(line => line.startsWith('>'))
+    .map(line => line.replace(/^> ?/u, '')).join('\n').trim() ?? ''
 }
 
 function cleanText(input: string): string {

@@ -68,11 +68,12 @@ export class SessionService {
     return await this.deps.repository.applySuggestedTitle(sessionId, title, this.deps.now())
   }
 
-  /** Replace the generic image fallback only after a completed run. */
-  public async applyTopicTitle(sessionId: string, suggestedTitle: string): Promise<boolean> {
+  /** Upgrade a completed image topic while protecting manual and unrelated automatic titles. */
+  public async applyTopicTitle(sessionId: string, suggestedTitle: string,
+    expectedAutomaticTitle?: string): Promise<boolean> {
     const title = titleFromPrompt(suggestedTitle, false, 'en')
     if (title.length === 0 || GENERIC_IMAGE_TITLES.has(title)) return false
-    return await this.deps.repository.applyTopicTitle(sessionId, title, this.deps.now())
+    return await this.deps.repository.applyTopicTitle(sessionId, title, this.deps.now(), expectedAutomaticTitle)
   }
 
   /** Marks a Session as the last opened one without changing its content. */

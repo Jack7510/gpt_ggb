@@ -7,8 +7,10 @@ import { join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
 import { parseArgs } from 'node:util'
+import { verifyPluginCoreRelease } from './plugin-core-release.mjs'
 
 const workspace = fileURLToPath(new URL('../', import.meta.url))
+await verifyPluginCoreRelease(workspace)
 const lock = JSON.parse(await readFile(join(workspace, 'vendor/plugin-core.lock.json'), 'utf8'))
 const { values } = parseArgs({ options: { tgz: { type: 'string' }, target: { type: 'string' },
   'verify-only': { type: 'boolean' }, 'dependencies-only': { type: 'boolean' },

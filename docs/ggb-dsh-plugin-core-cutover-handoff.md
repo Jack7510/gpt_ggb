@@ -22,6 +22,9 @@
   后续 mock Harness 的 PWA HTTP/SSE、下载、画布加载与编辑后基线续做也已通过。
   尚未调用真实 Provider 或部署生产。本次证据见 Backlog；下方 2026-10-17 的真实验收仍属于原切换批次。
 
+当前安装包的运行时、摘要与验收状态以[兼容组合](../ggb-dsh/docs/dsh-sdk-compatibility.md)及
+[Backlog](ggb-dsh-backlog.md)为准。Client 与插件当前均固定为 5.4.932.1；下节中的 5.4.929.3 是历史验收事实，不是当前版本要求。
+
 ## 2. 已验证范围（2026-10-17）
 
 ### 离线

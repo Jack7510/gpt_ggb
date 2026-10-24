@@ -30,6 +30,7 @@ interface InstalledContracts {
   parseBuildReceipt(input: unknown): Receipt
   validateHostDelivery(request: unknown, report: unknown, manifest: unknown): void
   loadReference(topic: string): unknown
+  loadReferences(topics: string[]): unknown
 }
 export interface InstalledRunnerOptions {
   pluginRoot: string
@@ -58,13 +59,14 @@ export class InstalledPluginCoreRunner {
       if (schemas.LIMITS[key] !== PLUGIN_CORE_LIMITS[key]) throw new Error('plugin_core_artifact_limits_mismatch')
     }
     const identity = installation.loadInstallation()
+    if (typeof installation.loadReferences !== 'function') throw new Error('plugin_core_reference_exports_invalid')
     const transport = new PluginCoreProcessRunner()
     return new InstalledPluginCoreRunner(options, transport,
       req.resolve('ggb-plugins-dsh/executor'), { parseBuildReceipt: schemas.parseBuildReceipt,
         summarizeHostVerification: gates.summarizeHostVerification,
         validateHostDelivery: gates.validateHostDelivery, validateHostMaterial: gates.validateHostMaterial,
         parseExecutionResult: execution.parseExecutionResult, projectInspect: execution.projectInspect,
-        loadReference: installation.loadReference }, { pluginName: identity.pluginName,
+        loadReference: installation.loadReference, loadReferences: installation.loadReferences }, { pluginName: identity.pluginName,
         pluginVersion: identity.pluginVersion, runtimeIdentity: identity.runtimeIdentity,
         packageIntegrity: options.packageIntegrity })
   }
@@ -96,6 +98,10 @@ export class InstalledPluginCoreRunner {
     return this.contracts.loadReference(topic)
   }
 
+  async references(topics: string[]): Promise<unknown> {
+    return this.contracts.loadReferences(topics)
+  }
+
   /** buildId and authenticated identities are mandatory in installed mode. */
   async build(request: unknown, runId: RunId, signal?: AbortSignal,
     base?: PluginCoreBaseInput, call?: PluginCoreToolRequest & { buildId: string }): Promise<PluginCoreRunResult> {
@@ -118,7 +124,7 @@ export class InstalledPluginCoreRunner {
     if (!result.ok) return { ok: false, execution: outcome.evidence, buildPhase: result.phase,
       error: await buildFailure(root, result.error!, outcome.evidence.stderrTail, receipt.issues) }
     const delivery = await this.accept(root, request, receipt, binding, base, signal)
-    this.options.state.accept(runId, delivery)
+    this.options.state.accept(runId, delivery, request)
     return { ok: true, check: { delivery: { id: delivery.id }, verification: delivery.verification }, execution: outcome.evidence }
   }
 

@@ -35,6 +35,31 @@ function maxTokensFailure() {
 }
 
 describe('plugin-core service', () => {
+  it.each([
+    { image: true, suffix: '\n抛物线 y²=4x，作焦点与准线。', accepted: true },
+    { image: false, suffix: '\nordinary multiline text', accepted: true },
+    { image: true, suffix: '', accepted: true },
+    { image: true, suffix: '\nrejected transcription', accepted: false },
+  ])('prepends only the accepted image problem: %j', async scenario => {
+    const root = await mkdtemp(join(tmpdir(), 'plugin-core-image-report-'))
+    dirs.push(root)
+    const state = new PluginCoreExecutionState(root)
+    const prompt = '请根据图片完成构图。'
+    const run = vi.fn(async () => {
+      state.accept(runId, { id: 'a'.repeat(64), ggbBase64: 'UEtmYWtl', ggbBytes: 6,
+        screenshotBase64: null, verification: {} }, { prompt: prompt + scenario.suffix, locale: 'zh-CN' })
+      if (!scenario.accepted) state.invalidate(runId)
+      return { finalResponse: '构图完成。', events: [{ type: 'turn/end', data: { reason: { kind: 'completed' } } }] }
+    })
+    const service = new PluginCoreService({ run } as unknown as PluginCoreDshRunner, { outputRoot: root, state })
+    const result = await service.run({ runId, deliveryContract: 'receipt-v1', providerKey: 'fake', prompt,
+      ...(scenario.image ? { image: { mediaType: 'image/png' as const,
+        dataBase64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=' } } : {}) })
+    expect(result.finalResponse).toBe(scenario.image && scenario.accepted && scenario.suffix
+      ? `### 原题（图片识别）\n\n> ${scenario.suffix.trim()}\n\n构图完成。` : '构图完成。')
+    expect(state.imageProblem(runId)).toBeNull()
+    expect(run).toHaveBeenCalledTimes(1)
+  })
   it('forwards ephemeral image input to the isolated SDK turn', async () => {
     const root = await mkdtemp(join(tmpdir(), 'plugin-core-image-'))
     dirs.push(root)

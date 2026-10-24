@@ -51,6 +51,20 @@ describe('automatic local session titles', () => {
     expect(await service.applyTopicTitle(session.sessionId, '抛物线')).toBe(false)
     expect((await repo.getSession(session.sessionId))?.title).toBe('手工标题')
   })
+  it('prefers the recognized problem and protects manual titles and later automatic titles', async () => {
+    const report = '### 原题（图片识别）\n\n> 184. 已知数列 a_n，求前 n 项和。\n\n已绘制圆。'
+    expect(titleFromFinalReport(report, 'p:y²=4x', 'zh-CN')).toBe('已知数列 a_n，求前 n 项和。')
+    expect(titleFromFinalReport('### Original problem (image transcription)\n\n> Find the mean of this data.\n\nDraw a circle.', undefined, 'en'))
+      .toBe('Find the mean of this data.')
+    const { repo, service } = fixture()
+    const session = await service.createSession()
+    await service.applySuggestedTitle(session.sessionId, '帮我完成这道题')
+    expect(await service.applyTopicTitle(session.sessionId, '数列前 n 项和', '帮我完成这道题')).toBe(true)
+    expect(await service.applyTopicTitle(session.sessionId, '后来的题目', '帮我完成这道题')).toBe(false)
+    await service.renameSession(session.sessionId, '我的题目')
+    expect(await service.applyTopicTitle(session.sessionId, '数列', '我的题目')).toBe(false)
+    expect((await repo.getSession(session.sessionId))?.title).toBe('我的题目')
+  })
   it('falls back to a native source when the final response has no geometry keyword', () => {
     expect(titleFromFinalReport('done', 'GGB 构造脚本\n\n# 1. [algebra] par\npar: y^2=4*x\n',
       'zh-CN')).toBe('par: y^2=4*x')

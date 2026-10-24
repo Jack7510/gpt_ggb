@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
+import { verifyPluginCoreRelease } from './plugin-core-release.mjs'
 
 const workspace = fileURLToPath(new URL('../', import.meta.url))
 const { values } = parseArgs({ options: { tgz: { type: 'string' }, source: { type: 'string' } } })
@@ -55,7 +56,9 @@ try {
   Object.assign(configuration.plugin, { archiveSha256: lock.archiveSha256, pluginVersion: lock.pluginVersion,
     geogebra: lock.geogebra })
   await compatibility.writeAtomicFile(join(workspace, 'vendor', lock.archive), bytes)
+  await compatibility.writeAtomicFile(join(workspace, 'vendor', `${lock.archive}.sha256`), `${lock.archiveSha256}  ${lock.archive}\n`)
   await compatibility.writeAtomicFile(lockPath, `${JSON.stringify(lock, null, 2)}\n`)
   await compatibility.writeAtomicFile(configurationPath, `${JSON.stringify(configuration, null, 2)}\n`)
+  await verifyPluginCoreRelease(workspace)
   console.log(JSON.stringify({ archive: lock.archive, sha256: lock.archiveSha256, sourceCommit, sourceDirty }))
 } finally { await rm(scratch, { recursive: true, force: true }) }

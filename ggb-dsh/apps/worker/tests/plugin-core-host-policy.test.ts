@@ -40,14 +40,17 @@ describe('default test installation fails before collecting synthetic receipt te
     const { cp, mkdir } = await import('node:fs/promises')
     const root = await mkdtemp(join(tmpdir(), 'bad-vendor-')); dirs.push(root)
     await mkdir(join(root, 'vendor'))
+    await mkdir(join(root, 'config'))
+    await cp(resolve('config/runtime-versions.json'), join(root, 'config/runtime-versions.json'))
     const lock = JSON.parse(await readFile(resolve('vendor/plugin-core.lock.json'), 'utf8'))
     if (mode === 'archive') await writeFile(join(root, 'vendor', lock.archive), 'broken TGZ')
     else {
       await cp(resolve('vendor', lock.archive), join(root, 'vendor', lock.archive))
+      await cp(resolve('vendor', `${lock.archive}.sha256`), join(root, 'vendor', `${lock.archive}.sha256`))
       lock.files['dsh/server.js'] = '0'.repeat(64)
     }
     await writeFile(join(root, 'vendor/plugin-core.lock.json'), JSON.stringify(lock))
     await expect(prepareInstalledTests(root)).rejects.toThrow(mode === 'archive'
-      ? 'plugin_core_test_archive_digest_mismatch' : 'plugin_core_package_integrity_mismatch')
+      ? 'plugin_core_archive_digest_mismatch' : 'plugin_core_package_integrity_mismatch')
   })
 })

@@ -51,7 +51,7 @@ ggb-dsh-server container (non-root)
 
 ```bash
 (cd ggb-dsh && pnpm install --frozen-lockfile && pnpm run provision:plugin-core && pnpm run provision:geogebra)
-(cd ggb-dsh && pnpm run check)
+(cd ggb-dsh && pnpm run verify:plugin-core:release && pnpm run check)
 
 docker build -f ggb-dsh/deploy/container/Dockerfile \
   -t ggb-dsh-server:<release-id> .
@@ -60,6 +60,13 @@ docker build -f ggb-dsh/deploy/container/Dockerfile \
 `provision:geogebra` 会写入受 Git 忽略的固定 runtime 与 manifest；API 会在启动前核验 manifest、
 版本、必要文件、固定补丁审计字段与实际 asset SHA-256。不匹配时拒绝监听。`provision:plugin-core` 从 vendored TGZ 供应插件依赖、Chromium 和固定 GeoGebra
 runtime，并运行插件 `doctor`。两者都必须在 Docker build 前完成。
+
+发行准入还要求实际 TGZ、vendor sidecar、vendor lock 与 runtime 配置中的发行摘要四者一致。
+`update-plugin-core.mjs` 同步生成 sidecar；`verify:plugin-core:release`、默认测试入口和 CI 拒绝不一致组合。
+在 vendor 目录执行 `shasum -a 256 -c ggb-plugins-dsh-0.8.3.tgz.sha256` 必须通过。
+
+目标环境发布后，另行授权并运行 PWA 验收，确认 active v2 Worker 升至 v3、旧缓存清理、新 engine 摘要，
+以及 Directrix 路径点隐藏标签后的重载、拖动与缩放。无需真实 Provider；本机升级测试不代替目标环境验收。
 
 运行镜像包含固定插件安装根、`vendor/plugin-core.lock.json`、`knowledge/` 与 `tools/`。
 Worker 校验包文件摘要和兼容组合后，从插件公开 server patch 加载四工具和 Worker Skill。

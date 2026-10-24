@@ -30,7 +30,7 @@
   },
   "plugin": {
     "pluginVersion": "0.8.3",
-    "archiveSha256": "bf893c09090bfa4391378746530a0f74f96383b9deb067a8a3181365cc96580b",
+    "archiveSha256": "fa44435dffe07dbe1804b56247bde3dd094dbee8eba69b20417109351a1494b2",
     "playwright": "1.64.1",
     "geogebra": {
       "version": "5.4.932.1",

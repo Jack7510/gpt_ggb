@@ -20,6 +20,8 @@ import {
   freeLocalPort, startLocalProcesses, workspaceRoot,
 } from './local-runtime.mjs'
 
+const runtimeVersion = JSON.parse(await readFile(join(workspaceRoot, 'config/runtime-versions.json'), 'utf8')).geogebra.version
+
 const { values } = parseArgs({ options: {
   authorized: { type: 'boolean' },
   prompt: { type: 'string', multiple: true },
@@ -214,6 +216,6 @@ async function verifyLoadedDelivery(current, runId, completed, sha256) {
       name, defined: api.isDefined(name), type: api.getObjectType(name),
     })) }
   })
-  assert.equal(facts.version, '5.4.929.3')
+  assert.equal(facts.version, runtimeVersion)
   return { ...facts, manifestObjects: manifest.objects, trustedReceipt: true }
 }

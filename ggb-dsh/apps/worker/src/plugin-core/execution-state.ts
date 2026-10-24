@@ -2,6 +2,7 @@ import { pluginCoreProgressFactSchema, PLUGIN_CORE_PROGRESS_LIMIT, type PluginCo
 import { mkdir, open, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { ChannelPluginCoreDelivery, PluginCoreBuildFailure, RunId } from '@ggb-copilot/application'
+import { recognizedImageProblem, type ImageProblem } from './image-problem.js'
 
 /** Shared candidate and quarantine ownership; never scans a delivery directory. */
 export class PluginCoreExecutionState {
@@ -51,7 +52,13 @@ export class PluginCoreExecutionState {
   private readonly deadlines = new Map<string, number>()
   setDeadline(runId: RunId, deadline: number): void { this.deadlines.set(runId, deadline) }
   deadline(runId: RunId): number { return this.deadlines.get(runId) ?? Number.POSITIVE_INFINITY }
-  release(runId: RunId): void { this.deadlines.delete(runId); this.builds.delete(runId); this.invalidate(runId) }
+  release(runId: RunId): void {
+    this.deadlines.delete(runId); this.builds.delete(runId); this.invalidate(runId); this.imagePrompts.delete(runId)
+  }
+  private readonly imagePrompts = new Map<string, string>()
+  private readonly imageProblems = new Map<string, ImageProblem>()
+  setImagePrompt(runId: RunId, prompt: string): void { this.imagePrompts.set(runId, prompt) }
+  imageProblem(runId: RunId): ImageProblem | null { return this.imageProblems.get(runId) ?? null }
   private readonly candidates = new Map<string, ChannelPluginCoreDelivery>()
   private readonly failed = new Set<string>()
   constructor(private readonly root: string) {}
@@ -97,10 +104,14 @@ export class PluginCoreExecutionState {
       await this.quarantine(name as RunId)
     }
   }
-  invalidate(runId: RunId): void { this.candidates.delete(runId) }
-  accept(runId: RunId, delivery: ChannelPluginCoreDelivery): void {
+  invalidate(runId: RunId): void { this.candidates.delete(runId); this.imageProblems.delete(runId) }
+  accept(runId: RunId, delivery: ChannelPluginCoreDelivery, request?: unknown): void {
     if (this.failed.has(runId)) throw new Error('plugin_core_cleanup_failed')
     this.candidates.set(runId, delivery)
+    this.imageProblems.delete(runId)
+    const prompt = this.imagePrompts.get(runId)
+    const problem = prompt === undefined ? null : recognizedImageProblem(prompt, request)
+    if (problem !== null) this.imageProblems.set(runId, problem)
   }
   candidate(runId: RunId): ChannelPluginCoreDelivery | null {
     return this.candidates.get(runId) ?? null

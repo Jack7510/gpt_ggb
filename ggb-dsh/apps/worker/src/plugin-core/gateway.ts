@@ -15,6 +15,7 @@ interface PluginCoreProcessRunnerPort {
     call?: PluginCoreToolRequest & { buildId: string }): Promise<PluginCoreRunResult>
   inspect?(base: import('./process-runner.js').PluginCoreBaseInput, runId: RunId, signal?: AbortSignal, call?: PluginCoreToolRequest): Promise<import('./process-runner.js').PluginCoreInspectResult>
   reference?(topic: string): Promise<unknown>
+  references?(topics: string[]): Promise<unknown>
 }
 
 export interface PluginCoreToolRequest {
@@ -165,7 +166,25 @@ export class PluginCoreGateway {
       tool: request.toolName, status: 'started', callId })
     const base = this.options.bases?.get(runId)
     if (request.toolName === 'ggb_inspect') {
-      const args = pluginRequest as { reference?: unknown } | null
+      const args = pluginRequest as { reference?: unknown; references?: unknown } | null
+      if (args?.references !== undefined) {
+        if (args.reference !== undefined || !Array.isArray(args.references)
+          || !args.references.every(topic => typeof topic === 'string') || !this.runner.references) {
+          return this.rejected('ggb_inspect', 'reference_unavailable', 'Reference batch is unavailable or invalid.')
+        }
+        await call?.update('started', { operation: 'reference', topics: args.references })
+        try {
+          const result = await this.runner.references(args.references)
+          await call?.result({ ok: true, check: result })
+          return { status: 'accepted', toolName: 'ggb_inspect', errors: [], result }
+        } catch (error) {
+          if (error instanceof Error && error.message === 'ggb_reference_response_oversized') {
+            await call?.failed(error)
+            return this.rejected('ggb_inspect', 'reference_limit_exceeded', 'Read fewer topics; the complete reference batch exceeds the byte limit.')
+          }
+          throw error
+        }
+      }
       if (args?.reference !== undefined) {
         if (typeof args.reference !== 'string' || !this.runner.reference) {
           return this.rejected('ggb_inspect', 'reference_unavailable', 'Reference topic is unavailable.')

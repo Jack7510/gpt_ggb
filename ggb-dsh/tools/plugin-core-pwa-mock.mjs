@@ -11,6 +11,8 @@ import { composeWorker } from '../apps/worker/lib/composition.js'
 import { composeApi } from '../apps/api/lib/composition.js'
 import { freeLocalPort, installedPluginRoot, installedPluginModule, workspaceRoot } from './local-runtime.mjs'
 
+const runtimeVersion = JSON.parse(await readFile(join(workspaceRoot, 'config/runtime-versions.json'), 'utf8')).geogebra.version
+
 const { values } = parseArgs({ options: { authorized: { type: 'boolean' }, out: { type: 'string' },
   'plugin-root': { type: 'string' } } })
 assert(values.authorized, 'Pass --authorized to run real local GeoGebra and Chromium (no Provider).')
@@ -36,10 +38,25 @@ const streams = []
 const views = new Map()
 const externalRequests = []
 const pageErrors = []
+const directrixStages = []
 const plans = [
-  { protocolVersion: 2, prompt: 'Create point P', locale: 'en', plan: {
-    program: [{ op: 'native', id: 'P', source: 'P=(0,0)', mode: 'algebra' }],
-    requirements: [{ id: 'p', source: 'point P', checks: [{ kind: 'exists', subjects: ['P'], scope: 'initial' }] }], interactions: [] } },
+  { protocolVersion: 2, prompt: 'Create point P, parabola p:y^2=4x, directrix d and point A on d', locale: 'en', plan: {
+    program: [
+      { op: 'native', id: 'P', source: 'P=(0,0)', mode: 'algebra' },
+      { op: 'native', id: 'p', source: 'p:y^2=4x', mode: 'algebra' },
+      { op: 'native', id: 'd', source: 'd=Directrix(p)', mode: 'algebra' },
+      { op: 'native', id: 'A', source: 'A=Point(d)', mode: 'algebra', initial: [-1, 2] },
+    ],
+    requirements: [
+      { id: 'p', source: 'point P', checks: [{ kind: 'exists', subjects: ['P'], scope: 'initial' }] },
+      { id: 'path', source: 'point A on d', checks: [
+        { kind: 'pointOn', subjects: ['A', 'd'], scope: 'sampled' },
+        { kind: 'dependsOn', subjects: ['A', 'd', 'p'], scope: 'sampled' },
+      ] },
+    ], interactions: [{ point: 'A', dx: 0, dy: 30 }],
+    styles: ['p', 'd'].map(object => ({ object, properties: { labelVisible: false } })),
+    view: { xMin: -5, xMax: 5, yMin: -4, yMax: 5 },
+  } },
   { protocolVersion: 2, prompt: 'Create Q=(1,1), keep P', locale: 'en', plan: {
     program: [{ op: 'native', id: 'Q', source: 'Q=(1,1)', mode: 'algebra', outputs: ['Q'] }],
     requirements: [{ id: 'q', source: 'Q=(1,1)', checks: [{ kind: 'exists', subjects: ['Q'], scope: 'initial' }] }], interactions: [] } },
@@ -75,17 +92,11 @@ try {
       try {
         const call = (name, args) => createTool(name).execute(args, { signal: abort.signal })
         const plan = plans[index]
-        let revision = (await call('ggb_request', { action: 'create', locale: plan.locale })).result.revision
-        const sections = {
-          program: plan.plan.program.map(({ op, ...step }) => step),
-          requirements: plan.plan.requirements.map(({ checks, ...requirement }) => requirement),
-          checks: plan.plan.requirements.flatMap(r => r.checks.map(c => ({ requirementId: r.id, ...c }))),
-          interactions: plan.plan.interactions,
-        }
-        for (const [section, items] of Object.entries(sections)) {
-          if (!items.length) continue
-          revision = (await call('ggb_request', { action: 'append', revision, section, items })).result.revision
-        }
+        const references = await call('ggb_inspect', { references: ['request', 'program', 'verification'] })
+        assert.equal(references.status, 'accepted', JSON.stringify(references))
+        const saved = await call('ggb_request', { requestText: JSON.stringify({ plan: plan.plan }), locale: plan.locale })
+        assert.equal(saved.status, 'accepted', JSON.stringify(saved))
+        const revision = saved.result.revision
         const checked = await call('ggb_check', { revision })
         assert.equal(checked.status, 'accepted', JSON.stringify(checked))
         const result = await call('ggb_build', { checkedRequestId: checked.result.checkedRequestId })
@@ -135,7 +146,7 @@ try {
   await page.locator('.settings-actions button').first().click()
   await page.locator('[data-test="new-session"]').click()
   await applet(page)
-  await send('Create point P')
+  await send(plans[0].prompt)
   await until(async () => requests.length === 1 && harnessCalls === 1)
   const firstRun = requests[0].runId
   assert.equal(requests[0].hasBase, false)
@@ -151,8 +162,9 @@ try {
   assert.equal(requests.length, 1)
   await page.waitForFunction(() => navigator.serviceWorker.controller !== null)
   releaseFirst()
-  const first = await delivery(firstRun, 1, ['P'])
+  const first = await delivery(firstRun, 1, ['A', 'P', 'd', 'p'])
   const frame = await applet(page)
+  await exerciseDirectrix(frame)
   await frame.evaluate(() => window.ggbApplet.setCoords('P', 2, 3))
   await frame.waitForFunction(() => window.ggbApplet.getXcoord('P') === 2 && window.ggbApplet.getYcoord('P') === 3)
   await send('Create Q=(1,1), keep P')
@@ -160,8 +172,9 @@ try {
   const secondRun = requests[1].runId
   assert(requests[1].hasBase)
   assert.notEqual(requests[1].baseSha256, first.sha256)
-  const second = await delivery(secondRun, 2, ['P', 'Q'])
+  const second = await delivery(secondRun, 2, ['A', 'P', 'Q', 'd', 'p'])
   const finalFrame = await applet(page)
+  await pathState(finalFrame, 'continued-delivery')
   const coordinates = await finalFrame.evaluate(() => ({ x: window.ggbApplet.getXcoord('P'), y: window.ggbApplet.getYcoord('P') }))
   assert.deepEqual(coordinates, { x: 2, y: 3 })
   assert.equal(views.get(secondRun).delivery.trustedBuild.binding.baseSha256, requests[1].baseSha256)
@@ -171,10 +184,10 @@ try {
   assert.deepEqual(externalRequests, [])
   report = { passed: true, modelDriver: 'mock Harness only', providerRequests: 0, harnessCalls,
     requests, streams, reconnect: { cursor, reconnected }, deliveries: [first, second],
-    baselineCoordinates: coordinates, serviceWorkerControlled: true, externalRequests, pageErrors }
+    baselineCoordinates: coordinates, directrixStages, serviceWorkerControlled: true, externalRequests, pageErrors }
   step('all PWA acceptance assertions passed')
 } catch (error) {
-  report = { passed: false, error: String(error?.stack ?? error), harnessCalls, requests, streams, toolResults, pageErrors, externalRequests }
+  report = { passed: false, error: String(error?.stack ?? error), harnessCalls, requests, streams, toolResults, directrixStages, pageErrors, externalRequests }
   if (page) await page.screenshot({ path: join(output, 'failure.png') }).catch(() => undefined)
   process.exitCode = 1
 } finally {
@@ -232,7 +245,7 @@ async function delivery(runId, round, names) {
       && expected.every(name => api.isDefined(name))
   }, names)
   const version = await frame.evaluate(() => window.ggbApplet.getVersion())
-  assert.equal(version, '5.4.929.3')
+  assert.equal(version, runtimeVersion)
   const downloadEvent = page.waitForEvent('download')
   await card.locator('[data-test="download-ggb"]').click()
   const download = await downloadEvent
@@ -253,4 +266,73 @@ async function delivery(runId, round, names) {
   assert.equal(view.delivery.cleanup.confirmed, true)
   await page.screenshot({ path: join(output, `round-${round}.png`) })
   return { runId, file, bytes: bytes.length, sha256, appletVersion: version, names }
+}
+
+async function pathState(frame, stage) {
+  const value = await frame.evaluate(stage => {
+    const api = window.ggbApplet
+    return { stage, version: api.getVersion(), defined: api.isDefined('A'),
+      parameter: api.getValue('PathParameter(A)'), x: api.getXcoord('A'),
+      command: api.getCommandString('A', false), independent: api.isIndependent('A'),
+      distance: api.getValue('Distance(A,d)'),
+      labels: { p: api.getLabelVisible('p'), d: api.getLabelVisible('d') },
+      xml: api.getXML() }
+  }, stage)
+  directrixStages.push(value)
+  assert.equal(value.version, runtimeVersion)
+  assert.equal(value.defined, true)
+  assert(Number.isFinite(value.parameter))
+  assert.equal(value.command, 'Point[d]')
+  assert.equal(value.independent, false)
+  assert(Math.abs(value.distance) < 1e-8)
+  assert.deepEqual(value.labels, { p: false, d: false })
+}
+
+async function reloadPath(frame) {
+  await frame.evaluate(async () => {
+    const api = window.ggbApplet
+    const data = await new Promise(done => api.getBase64(done))
+    await new Promise((done, reject) => {
+      const timer = setTimeout(() => reject(new Error('Path reload timed out')), 15000)
+      api.setBase64(data, () => { clearTimeout(timer); done() })
+    })
+  })
+}
+
+async function exerciseDirectrix(frame) {
+  await pathState(frame, 'delivered')
+  await frame.evaluate(() => {
+    const api = window.ggbApplet
+    for (const name of ['p', 'd']) {
+      api.setLabelVisible(name, true)
+      api.setLabelVisible(name, false)
+    }
+    api.setMode(0)
+  })
+  await pathState(frame, 'labels-hidden')
+  await reloadPath(frame)
+  await pathState(frame, 'reloaded')
+  const canvas = await frame.locator('#applet canvas').first().boundingBox()
+  assert(canvas)
+  const position = await frame.evaluate(() => {
+    const api = window.ggbApplet
+    const xml = new DOMParser().parseFromString(api.getXML(), 'text/xml')
+    const view = xml.querySelector('euclidianView coordSystem')
+    return { x: Number(view.getAttribute('xZero')) + api.getXcoord('A') * Number(view.getAttribute('scale')),
+      y: Number(view.getAttribute('yZero')) - api.getYcoord('A') * Number(view.getAttribute('yscale')), before: api.getYcoord('A') }
+  })
+  await page.mouse.move(canvas.x + position.x, canvas.y + position.y)
+  await page.mouse.down()
+  try { await page.mouse.move(canvas.x + position.x, canvas.y + position.y + 40, { steps: 12 }) }
+  finally { await page.mouse.up() }
+  await frame.waitForFunction(before => Math.abs(window.ggbApplet.getYcoord('A') - before) > 1e-8, position.before)
+  await pathState(frame, 'mouse-dragged')
+  const before = await frame.evaluate(() => window.ggbApplet.getViewProperties(1))
+  await frame.locator('#applet canvas').first().hover()
+  await page.mouse.wheel(0, -240)
+  await frame.waitForFunction(before => window.ggbApplet.getViewProperties(1) !== before, before)
+  await pathState(frame, 'zoomed')
+  await reloadPath(frame)
+  await pathState(frame, 'zoom-reloaded')
+  await page.screenshot({ path: join(output, 'directrix-client.png') })
 }

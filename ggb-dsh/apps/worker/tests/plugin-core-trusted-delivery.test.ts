@@ -78,6 +78,16 @@ describe.skipIf(!root)('installed receipt and trusted delivery (synthetic facts,
     return { dir, state, spawn, call, runner, gateway, reportBytes: () => reportBytes }
   }
 
+  it('binds recognition to the accepted installed build and clears it on rejection', async () => {
+    const { state, call } = await fixture()
+    state.setImagePrompt(runId, synthetic.request.prompt)
+    const prompt = `${synthetic.request.prompt}\n抛物线 y²=4x，作焦点与准线。`
+    expect((await call({ ...synthetic.request, prompt })).status).toBe('accepted')
+    expect(state.imageProblem(runId)?.text).toBe('抛物线 y²=4x，作焦点与准线。')
+    await call({ ...synthetic.request, plan: {} })
+    expect(state.imageProblem(runId)).toBeNull()
+  })
+
   it('executes the installed public entry and returns structural rejection before browser startup', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'installed-preflight-')); dirs.push(dir)
     const state = new PluginCoreExecutionState(dir)

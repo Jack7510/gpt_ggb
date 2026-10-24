@@ -122,12 +122,13 @@ export class SessionRepository {
     return changed
   }
 
-  /** Upgrade one generic image title after a completed run; manual titles stay authoritative. */
-  public async applyTopicTitle(sessionId: string, title: string, updatedAt: string): Promise<boolean> {
+  /** Upgrade a generic fallback or the expected first-turn title; manual titles stay authoritative. */
+  public async applyTopicTitle(sessionId: string, title: string, updatedAt: string,
+    expectedAutomaticTitle?: string): Promise<boolean> {
     let changed = false
     await this.db.update<LocalConversationSession>('sessions', sessionId, current => {
       if (current === null || current.titleSource !== 'automatic'
-        || !GENERIC_IMAGE_TITLES.has(current.title)) return current
+        || (!GENERIC_IMAGE_TITLES.has(current.title) && current.title !== expectedAutomaticTitle)) return current
       changed = true
       return { ...current, title, titleSource: 'automatic', updatedAt }
     })

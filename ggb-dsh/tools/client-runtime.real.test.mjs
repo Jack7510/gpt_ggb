@@ -51,7 +51,8 @@ async function state(page, label) {
         parameter: api.getValue('PathParameter(A)'), command: api.getCommandString('A', false),
         independent: api.isIndependent('A'), moveable: api.isMoveable('A') },
       objects: ['F', 'd', 's', 'M', 'b'].map(name => ({ name, defined: api.isDefined(name),
-        command: api.getCommandString(name, false) })),
+        command: api.getCommandString(name, false), labelVisible: api.getLabelVisible(name) })),
+      labels: { p: api.getLabelVisible('p'), d: api.getLabelVisible('d') },
       distance: api.getValue('Distance(A,d)') }
   }, label)
 }
@@ -66,6 +67,11 @@ function audit(observed) {
   assert.ok(Math.abs(observed.distance) < 1e-8)
   assert.ok(observed.objects.every(object => object.defined))
   assert.equal(observed.objects.find(object => object.name === 'd').command, 'Directrix[p]')
+}
+
+function auditHidden(observed) {
+  audit(observed)
+  assert.deepEqual(observed.labels, { p: false, d: false })
 }
 
 async function roundtrip(page) {
@@ -106,20 +112,27 @@ async function stableView(page) {
   }))
 }
 
-async function fixedGeometry(page, evidence) {
+async function fixedGeometry(page, evidence, generation) {
   await construct(page)
   evidence.push(await state(page, 'fixed-construction-and-style'))
   audit(evidence.at(-1))
+  assert.deepEqual(evidence.at(-1).labels, { p: true, d: true })
+  for (const object of ['p', 'd']) {
+    await page.evaluate(object => window.ggbApplet.setLabelVisible(object, false), object)
+    evidence.push(await state(page, `${object}.labelVisible=false`))
+    audit(evidence.at(-1))
+    assert.equal(evidence.at(-1).labels[object], false)
+  }
   await roundtrip(page)
   evidence.push(await state(page, 'fixed-reload'))
-  audit(evidence.at(-1))
+  auditHidden(evidence.at(-1))
   await stableView(page)
   await drag(page)
   evidence.push(await state(page, 'fixed-real-mouse-drag'))
-  audit(evidence.at(-1))
+  auditHidden(evidence.at(-1))
   await page.evaluate(() => window.ggbApplet.setValue('q', 2))
   evidence.push(await state(page, 'fixed-parent-dependency-update'))
-  audit(evidence.at(-1))
+  auditHidden(evidence.at(-1))
   assert.equal(evidence.at(-1).point.x, -2)
   const before = await page.evaluate(() => window.ggbApplet.getViewProperties(1))
   await page.locator('#applet canvas').first().hover()
@@ -128,8 +141,8 @@ async function fixedGeometry(page, evidence) {
   await stableView(page)
   const data = await roundtrip(page)
   evidence.push(await state(page, 'fixed-zoom-and-second-reload'))
-  audit(evidence.at(-1))
-  await writeFile(join(output, 'client-final.ggb'), Buffer.from(data, 'base64'))
+  auditHidden(evidence.at(-1))
+  await writeFile(join(output, `client-${generation}-final.ggb`), Buffer.from(data, 'base64'))
 }
 
 async function upgradeWorker(page) {
@@ -158,7 +171,8 @@ async function upgradeWorker(page) {
   await page.waitForFunction(() => navigator.serviceWorker.controller !== window.previousController)
 }
 
-test(`actual Client ${config.geogebra.version} upgrades an active v1 Worker and retains geometry`, { timeout: 120000 }, async () => {
+for (const generation of ['v1', 'v2']) {
+test(`actual Client ${config.geogebra.version} upgrades an active ${generation} Worker and retains geometry`, { timeout: 120000 }, async () => {
   await mkdir(output, { recursive: true })
   const patched = await readFile(join(root, identity.asset))
   assert.equal(hash(patched), identity.patchedSha256)
@@ -166,7 +180,7 @@ test(`actual Client ${config.geogebra.version} upgrades an active v1 Worker and 
   // prove the result equals the pinned official original bytes.
   const raw = Buffer.from(patched.toString().replace(';jTh(a.g,d,f,1,true);dSh(a.o)', ';dSh(a.o)'))
   assert.equal(hash(raw), identity.originalSha256)
-  const oldWorker = await readFile(join(workspace, 'tools/fixtures/runtime-v1-service-worker.js'))
+  const oldWorker = await readFile(join(workspace, `tools/fixtures/runtime-${generation}-service-worker.js`))
   const newWorker = await readFile(join(workspace, 'apps/client/dist/service-worker.js'))
   const requests = [], stages = []
   let legacy = true
@@ -206,12 +220,12 @@ test(`actual Client ${config.geogebra.version} upgrades an active v1 Worker and 
     stages.push(await state(page, 'original-worker-and-engine'))
     assert.equal(stages.at(-1).point.defined, false)
     const oldKeys = await page.evaluate(() => caches.keys())
-    assert.ok(oldKeys.includes('ggb-runtime-v1'))
-    await page.evaluate(async () => {
-      const cache = await caches.open('ggb-runtime-v2')
-      await cache.put('/geogebra/old-version', new Response('stale 5.4.929.3'))
-    })
-    await page.screenshot({ path: join(output, 'client-before-upgrade.png') })
+    assert.ok(oldKeys.includes(`ggb-runtime-${generation}`))
+    await page.evaluate(async other => {
+      const cache = await caches.open(`ggb-runtime-${other}`)
+      await cache.put('/geogebra/old-version', new Response('retired runtime'))
+    }, generation === 'v1' ? 'v2' : 'v1')
+    await page.screenshot({ path: join(output, `client-${generation}-before-upgrade.png`) })
     legacy = false
     await upgradeWorker(page)
     const upgradedKeys = await page.evaluate(() => caches.keys())
@@ -224,7 +238,7 @@ test(`actual Client ${config.geogebra.version} upgrades an active v1 Worker and 
     assert.equal(upgradedKeys.includes('ggb-runtime-v2'), false)
     await page.reload()
     await page.waitForFunction(() => typeof window.ggbApplet?.evalCommand === 'function')
-    await fixedGeometry(page, stages)
+    await fixedGeometry(page, stages, generation)
     const cached = await page.evaluate(async url => {
       const response = await (await caches.open('ggb-runtime-v3')).match(url)
       if (!response) throw new Error('Patched engine missing from v3 cache')
@@ -232,12 +246,13 @@ test(`actual Client ${config.geogebra.version} upgrades an active v1 Worker and 
     }, base + fragmentUrl)
     assert.equal(hash(Buffer.from(cached)), identity.patchedSha256)
     assert.ok(requests.some(request => request.legacy) && requests.some(request => !request.legacy))
-    await page.screenshot({ path: join(output, 'client-after-upgrade.png') })
+    await page.screenshot({ path: join(output, `client-${generation}-after-upgrade.png`) })
     stages.push({ label: 'worker-upgrade', oldKeys, upgradedKeys, cachedSha256: hash(Buffer.from(cached)) })
   } finally {
     await context.close()
     await browser.close()
     await server.close()
-    await writeFile(join(output, 'client-upgrade.json'), JSON.stringify({ identity, requests, stages }, null, 2))
+    await writeFile(join(output, `client-${generation}-upgrade.json`), JSON.stringify({ identity, generation, requests, stages }, null, 2))
   }
 })
+}
