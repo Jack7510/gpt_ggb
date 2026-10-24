@@ -12,10 +12,14 @@ const details: PluginCoreBuildFailure = { kind: 'verification_failed', lastBuild
 const failure = { code: 'plugin_core_no_delivery' as const, message: 'The last build did not satisfy verification.', details }
 
 describe('build failure presentation and reconnect', () => {
-  it('shows the same expression observation summary live and after reconnect', () => {
-    const reason = 'expression unverified: probe returned line (defined=false); expected boolean'
+  it.each([
+    ['expression', 'expression unverified: probe returned line (defined=false); expected boolean'],
+    ['type', 'type: objectType expected "conic"; actual "ellipse"'],
+    ['style', 'style: labelVisible expected false; actual true; visible=false'],
+    ['presentation', 'presentation: caption expected "焦点"; actual ""'],
+  ])('shows the same %s observation summary live and after reconnect', (method, reason) => {
     const expression = { ...failure, details: { ...details,
-      failedChecks: [{ requirementId: 'triangle', checkId: 'triangle:3', method: 'expression', status: 'unverified', reason }],
+      failedChecks: [{ requirementId: 'triangle', checkId: 'triangle:3', method, status: 'unverified', reason }],
       reasons: [`triangle/triangle:3: ${reason}`] } }
     const payload = pluginCoreEventPayloadSchema.parse({ type: 'plugin_core.failed', ...expression, usage: null })
     const live = applyPluginEvent(initialProjectedState('run'), { schemaVersion: 1, runId: 'run',

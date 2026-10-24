@@ -126,7 +126,8 @@ export class PluginCoreGateway {
       if (error instanceof Error && error.name === 'DraftError') {
         this.options.state?.reportProgress(request.runId, { tool: request.toolName, status: 'rejected', callId })
         await call?.failed(error)
-        return this.rejected(request.toolName, error.message, error.message)
+        const code = 'code' in error && typeof error.code === 'string' ? error.code : 'invalid_input'
+        return this.rejected(request.toolName, code, error.message)
       }
       this.options.state?.reportProgress(request.runId, { tool: request.toolName, status: 'failed', callId })
       if (error instanceof Error && error.message === 'plugin_core_cleanup_failed') {

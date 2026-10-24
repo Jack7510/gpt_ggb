@@ -528,6 +528,18 @@ Worker 在每个认证 turn 内只保存已读主题标识，重复读取返回 
 工具验证已声明的检查，不负责从任意题目自动补全遗漏条件。
 `type` 检查使用 `objectType`，`expected` 只用于 `expression`。
 requirement 的 `source` 逐字引用用户原文、转写或已确认回答，显示美化只放在 `caption`。
+Worker `requestText` 的 requirement 可改用 `sourceRef:"input"`；插件在保存前展开为本轮完整原文
+（含已保存或同次提交的转写），与 `source` 互斥。展开后仍受请求大小上限与原文校验约束；
+CLI 不接受该字段。check/build 和回执绑定展开后的同一请求摘要，拒绝不改变旧版本或句柄。
+定义输入包括题设数学对象，不能以实现中间量替代。例如 `F=(-cval,0)` 即使通过
+`dependsOn(F,cval)`，也不满足“F 是 C 的焦点”所需的 `dependsOn(F,C)`。
+工具只验证声明的依赖，不自动认证自然语言条件是否完整提取。
+失败的 type/style/presentation 检查保存有界 expected/actual 和 message；宿主白名单投影后，
+工具修复反馈、run failure、SSE 与重连视图使用同一摘要，未知状态不写成 false。
+隐藏数值对象的 labelVisible 在现有运行证据中首次于重载后变化；值、defined、visible 保持。
+离线回放覆盖该差异。快照归一化不豁免显式样式要求；可选隐藏样式可只要求 visible:false，
+显式 labelVisible 仍须重载通过。该证据定位导出/重载边界，尚不能区分引擎序列化与加载内部原因。
+
 Client 发送续做请求时重新读取选中对象，不复用输入框提示缓存。
 每个对象带精确 `label`、引擎 `type` 和显示 `displayName`，最多 16 项；按标签去重，不按显示名合并。
 Client 将这些信息序列化为有界 JSON 数据块，与用户要求一起进入现有 `prompt`。

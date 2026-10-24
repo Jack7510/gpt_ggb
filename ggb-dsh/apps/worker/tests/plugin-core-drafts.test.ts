@@ -154,3 +154,14 @@ it('keeps image transcription in small blocks and validates source against the a
   expect(f.check.mock.calls[0]![0]).toMatchObject({ prompt: 'Draw the image\nCreate point P' })
   expect(f.argumentsBytes.every(bytes => bytes <= 2048)).toBe(true)
 })
+
+
+it('keeps a recoverable draft error code separate from its human message', async () => {
+  const f = await fixture()
+  expect(await f.call('ggb_request', { requestText: '{' })).toMatchObject({
+    status: 'rejected', errors: [{ code: 'draft_request_json', message: 'requestText is not valid JSON' }],
+  })
+  await f.save()
+  expect((await f.call('ggb_check', { revision: 4 })).status).toBe('accepted')
+  expect(f.build).not.toHaveBeenCalled()
+})

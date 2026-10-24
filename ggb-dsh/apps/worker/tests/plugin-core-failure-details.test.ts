@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { runIdSchema } from '@ggb-copilot/application'
+import { PluginCoreService } from '../src/plugin-core/service.js'
+import type { PluginCoreDshRunner } from '../src/plugin-core/dsh-runner.js'
 import { buildFailure } from '../src/plugin-core/failure-details.js'
 import { InstalledPluginCoreRunner } from '../src/plugin-core/installed-runner.js'
 import { PluginCoreProcessRunner } from '../src/plugin-core/process-runner.js'
@@ -32,6 +34,40 @@ describe('owned build failure projection', () => {
     const result = await buildFailure(root, fallback, '')
     expect(result).toMatchObject({ details: { failures: [{ details: { cause: [{ evidence: { message: reason } }] } }] } })
     expect(JSON.stringify(result)).not.toMatch(/private-error|private-object|observation|depth_limit/)
+  })
+
+  it.each([
+    ['type', { objectType: 'conic' }, { objectType: 'ellipse', defined: true },
+      'type: objectType expected "conic"; actual "ellipse"'],
+    ['style', { labelVisible: false }, { objectType: 'numeric', defined: true, labelVisible: true, visible: false },
+      'style: labelVisible expected false; actual true; visible=false'],
+    ['presentation', { caption: 'F' }, { objectType: 'point', defined: true, caption: '', labelStyle: 0 },
+      'presentation: caption expected "F"; actual ""; labelStyle expected 3; actual 0'],
+  ])('carries %s expected/actual facts from owned reports to model and run failure', async (method, expected, actual, reason) => {
+    const root = await directory()
+    const runId = runIdSchema.parse(`run_${randomUUID()}`)
+    const state = new PluginCoreExecutionState(root)
+    await writeFile(join(root, 'verification.json'), JSON.stringify({ reload: { results: [{
+      requirementId: 'r', checkId: 'r:0', method, status: 'failed', subjects: ['F'],
+      evidence: { expected, actual, message: reason, objects: [{ path: '/Users/private', token: 'private-key' }] },
+    }] } }))
+    const error = await buildFailure(root, { code: 'reload_failed', message: 'Reload checks failed' }, '')
+    expect(error.details).toMatchObject({ checks: [{ phase: 'reload', evidence: { expected, actual, message: reason } }] })
+    const runner = { check: vi.fn(), build: vi.fn(async () => ({ ok: false, buildPhase: 'execution' as const, error })) }
+    const gateway = new PluginCoreGateway(runner, { state })
+    const dsh = { run: async () => {
+      const result = await gateway.dispatch({ runId, turnId: randomUUID(), epoch: 1,
+        toolName: 'ggb_build', arguments: {} })
+      expect(result.report?.failedChecks).toMatchObject([{ method, reason }])
+      expect(state.candidate(runId)).toBeNull()
+      return { finalResponse: '', events: [{ type: 'turn/end', data: { reason: { kind: 'completed' } } }] }
+    } } as unknown as PluginCoreDshRunner
+    const result = await new PluginCoreService(dsh, { outputRoot: root, state })
+      .run({ runId, prompt: 'original', deliveryContract: 'receipt-v1', providerKey: 'fake' })
+    expect(result.error).toMatchObject({ code: 'plugin_core_no_delivery', details: {
+      kind: 'verification_failed', failedChecks: [{ method, reason }],
+    } })
+    expect(JSON.stringify(error)).not.toMatch(/private-key|Users|objects/)
   })
 
   it('keeps raw native returns separate from normalized outputs without leaking host data', async () => {
