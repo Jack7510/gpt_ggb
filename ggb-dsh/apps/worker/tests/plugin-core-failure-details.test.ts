@@ -70,6 +70,35 @@ describe('owned build failure projection', () => {
     expect(JSON.stringify(error)).not.toMatch(/private-key|Users|objects/)
   })
 
+  it.each([
+    ['Incomplete native outputs: T_{1}: T_{1},c,p,b; positional Polygon creates extra outputs; declare all labels, or use Polygon({...}) for a fixed-vertex face-only output'],
+    ['Execution failed or output undefined: E_{1}; actual labels: none; missing: E_{1} (not created); built-in rounding uses lowercase round(x[, digits]); verify unrounded residuals and area sums; round only display copies'],
+  ])('retains native repair guidance from owned files through tool and final failure', async message => {
+    const root = await directory()
+    const runId = runIdSchema.parse(`run_${randomUUID()}`)
+    const state = new PluginCoreExecutionState(root)
+    await writeFile(join(root, 'run.json'), JSON.stringify({ state: 'failed', error: {
+      code: 'execution_failed', message, details: { cause: { stepId: 'T_{1}',
+        operation: 'outputs', actual: { rawLabels: null, outputs: null } } },
+    } }))
+    const error = await buildFailure(root, fallback, '')
+    expect(error.message).toBe(message)
+    const gateway = new PluginCoreGateway({ check: vi.fn(),
+      build: vi.fn(async () => ({ ok: false, buildPhase: 'execution' as const, error })) }, { state })
+    const dsh = { run: async () => {
+      const result = await gateway.dispatch({ runId, turnId: randomUUID(), epoch: 1,
+        toolName: 'ggb_build', arguments: {} })
+      expect(result.errors[0]?.message).toBe(message)
+      expect(result.buildBudget).toEqual({ used: 1, limit: 3, remaining: 2 })
+      return { finalResponse: '', events: [{ type: 'turn/end', data: { reason: { kind: 'completed' } } }] }
+    } } as unknown as PluginCoreDshRunner
+    const result = await new PluginCoreService(dsh, { outputRoot: root, state })
+      .run({ runId, prompt: 'original', deliveryContract: 'receipt-v1', providerKey: 'fake' })
+    expect(result.delivery).toBeNull()
+    expect(result.error?.details).toMatchObject({ kind: 'execution_failed',
+      error: { code: 'execution_failed', message }, reasons: [message] })
+  })
+
   it('keeps raw native returns separate from normalized outputs without leaking host data', async () => {
     const root = await directory()
     for (const actual of [{ rawLabels: null, outputs: null }, { rawLabels: 'A,Z', outputs: ['A', 'Z'] }]) {
