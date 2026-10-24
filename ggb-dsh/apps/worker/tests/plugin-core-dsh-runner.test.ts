@@ -83,7 +83,9 @@ describe('plugin-core DSH runner', () => {
         if (withImage) expect(input).toEqual([{ type: 'text', text: expect.any(String) },
           { type: 'image', mimeType: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=' }])
         else expect(typeof input).toBe('string')
-        expect(_prompt).toContain('ggb_inspect({reference: topic})')
+        expect(_prompt).toContain('Read references only for a specific unresolved gap')
+        expect(_prompt).toContain('do not reread request or compare known alternatives')
+        expect(_prompt).toContain(withImage ? 'First transcribe it into complete mathematical problem text' : 'No image is attached')
         expect(_prompt).not.toContain('Do not call ggb_inspect;')
         expect(_prompt).toContain(baseAttached ? 'A base GGB is attached' : 'No base GGB is attached')
         const env = captured?.env ?? {}
@@ -96,7 +98,15 @@ describe('plugin-core DSH runner', () => {
             authentication: installedSchemas.signRequest(env.GGB_PLUGIN_CORE_TOOL_TOKEN!, unsigned) })
           return installedSchemas.parseToolResponse(JSON.parse(response.trim()))
         }
-        await call('ggb_request', { action: 'create', locale: 'en' })
+        const requestText = JSON.stringify({ plan: { program: [], requirements: [], interactions: [] } })
+        if (withImage) {
+          const refused = await call('ggb_request', { requestText })
+          expect(refused.result).toMatchObject({ status: 'rejected', errors: [{ code: 'image_transcription_required' }] })
+          expect(runner.check).not.toHaveBeenCalled()
+          expect(runner.build).not.toHaveBeenCalled()
+        }
+        await call('ggb_request', { requestText, locale: 'en',
+          ...(withImage ? { transcription: ['Create point P'] } : {}) })
         const checked = await call('ggb_check', { revision: 1 })
         const parsed = await call('ggb_build', { checkedRequestId: checked.result.result.checkedRequestId })
         return { sessionId: turnId, finalResponse: JSON.stringify(parsed.result),

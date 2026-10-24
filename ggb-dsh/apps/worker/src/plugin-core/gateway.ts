@@ -1,5 +1,6 @@
 import type { HostDraftSession } from './tool-protocol.js'
 import type { PluginCoreReferenceHistory } from './reference-history.js'
+import type { PluginCoreImageInputContract } from './image-input-contract.js'
 import { summarizeBuildFailure } from './build-failure-summary.js'
 import type { PluginCoreExecutionState } from './execution-state.js'
 import { randomUUID } from 'node:crypto'
@@ -30,6 +31,7 @@ export interface PluginCoreToolRequest {
   readonly protocolVersion?: 3
   readonly draftSession?: HostDraftSession
   readonly referenceHistory?: PluginCoreReferenceHistory
+  readonly imageInput?: PluginCoreImageInputContract
   readonly wireArguments?: unknown
   /** The plugin request object. The runner removes any model-supplied output path. */
   readonly arguments: unknown
@@ -143,7 +145,14 @@ export class PluginCoreGateway {
     if (!draft) return await this.execute(request, signal, call, callId)
     if (request.toolName === 'ggb_request') {
       this.options.state?.reportProgress(request.runId, { tool: request.toolName, status: 'started', callId })
+      if (request.imageInput?.canSave(request.arguments) === false) {
+        const result = this.rejected('ggb_request', 'image_transcription_required',
+          'An image is attached. Before the first save, include nonempty transcription with the complete mathematical problem text: givens, equations, labels, constraints and question. Preserve ambiguity; do not solve or invent conditions. Repairs may omit saved transcription, but cannot clear it.')
+        await call?.result({ ok: false, error: result.errors[0] })
+        return result
+      }
       const result = draft.operate(request.arguments)
+      request.imageInput?.accepted()
       if (isRecord(request.arguments) && request.arguments.action !== 'read') this.options.state?.invalidate(request.runId)
       await call?.result(result)
       return { status: 'accepted', toolName: request.toolName, result, errors: [] }

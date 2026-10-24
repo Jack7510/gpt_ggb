@@ -79,7 +79,7 @@ export class PluginCoreDshRunner {
     const image = request.image === undefined ? undefined : pluginCoreImageSchema.parse(request.image)
     const turnId = request.turnId ?? randomUUID()
     const home = join(this.options.dshHomeRoot, request.runId, turnId)
-    const toolToken = this.tools.openTurn(request.runId, turnId, request.epoch, request.signal, request.prompt)
+    const toolToken = this.tools.openTurn(request.runId, turnId, request.epoch, request.signal, request.prompt, image !== undefined)
     const evidence = this.evidence.begin(request.runId, turnId, request.epoch,
       [request.providerKey, toolToken, ...(image === undefined ? [] : [image.dataBase64])])
     let harness: PluginCoreHarnessPort | null = null
@@ -94,7 +94,7 @@ export class PluginCoreDshRunner {
       }] }]), { mode: 0o600 })
       harness = (this.options.createHarness ?? (options => new DeepSeekHarness(options)))(
         this.harnessOptions(request, turnId, home, toolToken, evidence.providerStreamPath))
-      const prompt = `${this.systemPromptFor(request.baseAttached)}\n\nTask:\n${request.prompt}`
+      const prompt = `${this.systemPromptFor(request.baseAttached, image !== undefined)}\n\nTask:\n${request.prompt}`
       const content: string | SdkPromptContentBlock[] = image === undefined ? prompt
         : [{ type: 'text', text: prompt }, { type: 'image', data: image.dataBase64, mimeType: image.mediaType }]
       result = await this.runBounded(request.runId, harness, content, turnId,
@@ -184,11 +184,14 @@ export class PluginCoreDshRunner {
   }
 
   /** Base inspection needs an attachment; fixed reference topics are always available. */
-  private systemPromptFor(baseAttached: boolean): string {
+  private systemPromptFor(baseAttached: boolean, imageAttached: boolean): string {
     const state = baseAttached
       ? 'A base GGB is attached to this run. Call ggb_inspect({}) to inspect it first and use its exact object names.'
       : 'No base GGB is attached to this run. Do not inspect a base with ggb_inspect({}); create a new figure with plan.program. If base inspection reports base_missing, continue with a new figure.'
-    return `Host task facts:\n${state}\nFor either task, ggb_inspect({reference: topic}) can read fixed bundled knowledge topics without a base.`
+    const image = imageAttached
+      ? 'An image is attached. First transcribe it into complete mathematical problem text (givens, equations, labels, constraints and question). Include it in transcription on the first ggb_request, outside requestText. Preserve ambiguity; do not solve or invent conditions.'
+      : 'No image is attached; transcription is optional.'
+    return `Host task facts:\n${state}\n${image}\nUse the injected Worker request contract. Choose one adequate construction and submit once its checks are ready. Read references only for a specific unresolved gap; do not reread request or compare known alternatives before submitting.`
   }
 
   private async runBounded(runId: RunId, harness: PluginCoreHarnessPort, prompt: string | SdkPromptContentBlock[], turnId: string,

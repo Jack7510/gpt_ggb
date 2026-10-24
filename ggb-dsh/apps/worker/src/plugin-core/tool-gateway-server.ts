@@ -4,6 +4,7 @@ import { createConnection, createServer, type Server, type Socket } from 'node:n
 import type { RunId } from '@ggb-copilot/application'
 import { PluginCoreGateway, type PluginCoreToolName, type PluginCoreToolResult } from './gateway.js'
 import { PluginCoreReferenceHistory } from './reference-history.js'
+import { PluginCoreImageInputContract } from './image-input-contract.js'
 import { type PluginCoreEvidenceStore } from './evidence.js'
 import { type HostToolProtocol, type HostToolRequest, type HostToolResponse, type HostDraftSession } from './tool-protocol.js'
 
@@ -19,6 +20,7 @@ interface TurnBinding {
   readonly epoch: number
   readonly draft: HostDraftSession
   readonly references: PluginCoreReferenceHistory
+  readonly imageInput: PluginCoreImageInputContract
   readonly token: Buffer
   readonly abort: AbortController
   readonly signal?: AbortSignal
@@ -47,7 +49,7 @@ export class PluginCoreToolGatewayServer {
   }
 
   /** Mint one turn capability. The Harness receives the token; it never reaches storage or logs. */
-  openTurn(runId: RunId, turnId: string, epoch: number, signal?: AbortSignal, prompt = ''): string {
+  openTurn(runId: RunId, turnId: string, epoch: number, signal?: AbortSignal, prompt = '', imageAttached = false): string {
     if (this.bindings.has(turnId)) throw new Error('plugin_core_tool_turn_already_open')
     const token = randomBytes(32).toString('hex')
     const abort = new AbortController()
@@ -56,6 +58,7 @@ export class PluginCoreToolGatewayServer {
     if (signal?.aborted === true) abort.abort()
     this.bindings.set(turnId, { runId, epoch, draft: this.protocol.createDraft(prompt),
       references: new PluginCoreReferenceHistory(this.protocol.preloadedReferenceTopics, this.protocol.maxReferenceBytes),
+      imageInput: new PluginCoreImageInputContract(imageAttached),
       token: Buffer.from(token, 'hex'), abort,
       ...(signal === undefined ? {} : { signal, onAbort }) })
     this.options.evidence?.begin(runId, turnId, epoch, [token])
@@ -178,6 +181,7 @@ export class PluginCoreToolGatewayServer {
         epoch: request.epoch, arguments: this.protocol.arguments(request),
         draftSession: this.bindings.get(request.turnId)!.draft,
         referenceHistory: this.bindings.get(request.turnId)!.references,
+        imageInput: this.bindings.get(request.turnId)!.imageInput,
         wireArguments: request.arguments, argumentsDigest: request.argumentsDigest,
         requestId: request.requestId, toolCallId: request.toolCallId, protocolVersion: this.protocol.version,
       }, AbortSignal.any([signal, this.bindings.get(request.turnId)!.abort.signal]))

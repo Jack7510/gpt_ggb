@@ -38,7 +38,7 @@ async function installed() {
   const installation = await import(pathToFileURL(require.resolve('ggb-plugins-dsh/installation')).href)
   return { tools, schemas, installation }
 }
-async function harness(prompt = '', preloadedReferenceTopics?: readonly string[]) {
+async function harness(prompt = '', preloadedReferenceTopics?: readonly string[], imageAttached = false) {
   const plugin = await installed()
   const dir = await mkdtemp(join(tmpdir(), 'ggb-host2-')); dirs.push(dir)
   const runId = runIdSchema.parse(`run_${randomUUID()}`)
@@ -55,7 +55,7 @@ async function harness(prompt = '', preloadedReferenceTopics?: readonly string[]
   const server = new PluginCoreToolGatewayServer(join(dir, 'host.sock'),
     new PluginCoreGateway(runner, { evidence }), 2000, { evidence, ...protocol })
   servers.push(server); await server.listen()
-  const token = server.openTurn(runId, turnId, 1, undefined, prompt)
+  const token = server.openTurn(runId, turnId, 1, undefined, prompt, imageAttached)
   evidence.get(turnId)!.addSecrets(['fake-provider-secret'])
   for (const [key, value] of Object.entries({ GGB_PLUGIN_CORE_TOOL_SOCKET: server.socketPath,
     GGB_PLUGIN_CORE_TOOL_RUN_ID: runId, GGB_PLUGIN_CORE_TOOL_TURN_ID: turnId,
@@ -90,6 +90,43 @@ async function prepare(h: Awaited<ReturnType<typeof harness>>) {
 }
 
 describe.skipIf(!installedRoot)('installed protocol 2 to the host (no SDK turn/provider)', () => {
+  it('requires image problem text before saving, then checks exact sources and retains text on repair', async () => {
+    const h = await harness('Draw the image', undefined, true)
+    const root = join(h.dir, 'image-check')
+    const runner = await InstalledPluginCoreRunner.load({ pluginRoot: installedRoot!, outputRoot: root,
+      packageIntegrity: 'a'.repeat(64), state: new PluginCoreExecutionState(root) })
+    h.runner.check.mockImplementation((...args) => runner.check(...args))
+    const requestText = JSON.stringify({ plan: { program: [{ id: 'P', source: 'P=(1,0)' }],
+      requirements: [{ id: 'point', source: 'Create point P', checks: [{ kind: 'exists', subjects: ['P'], scope: 'initial' }] }], interactions: [] } })
+    for (const args of [{ requestText }, { requestText, transcription: [] }]) {
+      expect(await h.tools.createTool('ggb_request').execute(args, context()))
+        .toMatchObject({ status: 'rejected', errors: [{ code: 'image_transcription_required', message: expect.stringContaining('mathematical problem text') }] })
+    }
+    expect(h.runner.check).not.toHaveBeenCalled()
+    expect(h.runner.build).not.toHaveBeenCalled()
+    expect(await h.tools.createTool('ggb_request').execute({ requestText: '{', transcription: ['Create point P'] }, context()))
+      .toMatchObject({ status: 'rejected' })
+    expect(await h.tools.createTool('ggb_request').execute({ requestText }, context()))
+      .toMatchObject({ status: 'rejected', errors: [{ code: 'image_transcription_required' }] })
+    expect(await h.tools.createTool('ggb_request').execute({ requestText, transcription: ['Create point P'], locale: 'en' }, context()))
+      .toMatchObject({ status: 'accepted', result: { revision: 1 } })
+    const first = await h.tools.createTool('ggb_check').execute({ revision: 1 }, context())
+    expect(first).toMatchObject({ status: 'accepted' })
+    expect(await h.tools.createTool('ggb_request').execute({ requestText, transcription: [] }, context()))
+      .toMatchObject({ status: 'rejected', errors: [{ code: 'image_transcription_required' }] })
+    expect(await h.tools.createTool('ggb_check').execute({ revision: 1 }, context())).toMatchObject({ status: 'accepted' })
+    expect(await h.tools.createTool('ggb_request').execute({ requestText }, context()))
+      .toMatchObject({ status: 'accepted', result: { revision: 2 } })
+    expect(await h.tools.createTool('ggb_check').execute({ revision: 2 }, context())).toMatchObject({ status: 'accepted' })
+    expect(h.runner.check.mock.calls.at(-1)![0]).toMatchObject({ prompt: 'Draw the image\nCreate point P', locale: 'en' })
+    const ledger = await h.ledger()
+    expect(ledger.calls[0]).toMatchObject({ stage: 'rejected', pluginResult: { ok: false, error: { code: 'image_transcription_required' } } })
+    const nextTurn = randomUUID()
+    const token = h.server.openTurn(h.runId, nextTurn, 2, undefined, 'Draw the image', true)
+    vi.stubEnv('GGB_PLUGIN_CORE_TOOL_TURN_ID', nextTurn); vi.stubEnv('GGB_PLUGIN_CORE_TOOL_EPOCH', '2'); vi.stubEnv('GGB_PLUGIN_CORE_TOOL_TOKEN', token)
+    expect(await h.tools.createTool('ggb_request').execute({ requestText }, context()))
+      .toMatchObject({ status: 'rejected', errors: [{ code: 'image_transcription_required' }] })
+  })
   it('deduplicates preloaded, single and batch topics inside one authenticated turn only', async () => {
     const h = await harness('', ['request'])
     expect(await h.tools.createTool('ggb_inspect').execute({ reference: 'request' }, context()))
