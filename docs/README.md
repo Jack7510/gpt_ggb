@@ -15,7 +15,8 @@
 | 工作区运行与排障 | [工作区 README](../ggb-dsh/README.md)：增量构建、启动配置、检查、环境变量与调试 |
 | 插件源码改动的手工验证 | [插件源码手工验证](ggb-dsh-plugin-manual-verification.md)：构建插件、覆盖固定安装、启动 API/Worker 与 Vite、检查锁恢复和 GGB |
 | 设计取舍与精确契约 | [plugin-core 采用方案](ggb-dsh-plugin-core-adoption.md)：目标设计、取舍和已冻结决策；不记录逐次运行结果 |
-| 演进回顾与开发分享 | [GGB Agent 演进时间线](ggb-agent-evolution-timeline.md)：workflow、plugin-core、安装式 DSH 插件的关键决策、动因与取舍；区分历史事实和拟议方案 |
+| 演进回顾与开发分享 | [从一个问题到 Agent 交付](ggb-agent-evolution-timeline.md)：Pipeline、plugin-core、标准 DSH 插件的演进，以及问题实验、插件开发、Agent 验证与用户交付的方法；区分历史事实和拟议方案 |
+| 方法分享与案例讲述 | [从一个问题到插件与 Agent](question-plugin-agent.md)：结合多次会话的开发过程、真实故障、分层验证、讲述提纲与教学示例 |
 | 安装式插件解耦设计 | [安装式 DSH 插件设计](ggb-dsh-installed-plugin-design.md)：目标职责、协议、代码迁移、实施顺序与验收条件；实施状态见 Backlog |
 | release 与换机交接 | [切换交接](ggb-dsh-plugin-core-cutover-handoff.md)：当前引擎、已验证范围、风险、旧 run 处理与换机步骤 |
 | 当前工作与缺陷 | [统一 Backlog](ggb-dsh-backlog.md)：工作项、根因、优先级、依赖和退出条件；实施、离线验证与真实验收分列 |
