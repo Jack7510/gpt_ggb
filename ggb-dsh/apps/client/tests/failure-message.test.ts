@@ -12,6 +12,23 @@ const details: PluginCoreBuildFailure = { kind: 'verification_failed', lastBuild
 const failure = { code: 'plugin_core_no_delivery' as const, message: 'The last build did not satisfy verification.', details }
 
 describe('build failure presentation and reconnect', () => {
+  it('shows the same expression observation summary live and after reconnect', () => {
+    const reason = 'expression unverified: probe returned line (defined=false); expected boolean'
+    const expression = { ...failure, details: { ...details,
+      failedChecks: [{ requirementId: 'triangle', checkId: 'triangle:3', method: 'expression', status: 'unverified', reason }],
+      reasons: [`triangle/triangle:3: ${reason}`] } }
+    const payload = pluginCoreEventPayloadSchema.parse({ type: 'plugin_core.failed', ...expression, usage: null })
+    const live = applyPluginEvent(initialProjectedState('run'), { schemaVersion: 1, runId: 'run',
+      eventId: 3, occurredAt: new Date().toISOString(), payload })
+    const restored = pluginViewState({ runId: 'run', phase: 'failed', createdAt: '',
+      events: { latestEventId: 3 }, failure: expression, terminal: true, finalResponse: null } as PluginCoreRunView)
+    expect(live.failure).toEqual(restored.failure)
+    for (const locale of ['zh-CN', 'en'] as const) {
+      expect(failureMessage(live.failure!, locale)).toContain(reason)
+      expect(describeRunStatus(restored, true, Date.now(), locale).detail).toContain(reason)
+    }
+  })
+
   it('keeps the same structured facts in an SSE event and a restored run view', () => {
     const payload = pluginCoreEventPayloadSchema.parse({ type: 'plugin_core.failed', ...failure, usage: null })
     const live = applyPluginEvent(initialProjectedState('run'), { schemaVersion: 1, runId: 'run',

@@ -21,6 +21,37 @@ async function directory() {
 afterEach(async () => { vi.restoreAllMocks(); for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true }) })
 
 describe('owned build failure projection', () => {
+  it('preserves nested expression messages while excluding observations and object dumps', async () => {
+    const root = await directory()
+    const reason = 'expression unverified: probe returned line (defined=false); expected boolean'
+    const check = { requirementId: 'triangle', checkId: 'triangle:3', method: 'expression', status: 'unverified',
+      evidence: { message: reason, observation: { type: 'line', defined: false, error: 'private-error' }, objects: ['private-object'] } }
+    await writeFile(join(root, 'run.json'), JSON.stringify({ state: 'failed', error: {
+      code: 'verification_unverified', message: 'Required checks did not pass', details: { cause: [check] },
+    } }))
+    const result = await buildFailure(root, fallback, '')
+    expect(result).toMatchObject({ details: { failures: [{ details: { cause: [{ evidence: { message: reason } }] } }] } })
+    expect(JSON.stringify(result)).not.toMatch(/private-error|private-object|observation|depth_limit/)
+  })
+
+  it('keeps raw native returns separate from normalized outputs without leaking host data', async () => {
+    const root = await directory()
+    for (const actual of [{ rawLabels: null, outputs: null }, { rawLabels: 'A,Z', outputs: ['A', 'Z'] }]) {
+      await writeFile(join(root, 'run.json'), JSON.stringify({ state: 'failed', error: {
+        code: 'execution_failed', message: 'Native output rejected', details: { cause: {
+          stepId: 'F_1', source: 'F_1=Element(Focus(ell),1)', operation: 'outputs',
+          actual: { ...actual, token: 'secret-token', path: '/Users/private/runtime' },
+        } },
+      } }))
+      const result = await buildFailure(root, fallback, '')
+      expect(result).toMatchObject({ details: { failures: [{ details: { cause: {
+        stepId: 'F_1', source: 'F_1=Element(Focus(ell),1)', operation: 'outputs', actual,
+      } } }] } })
+      expect(JSON.stringify(result)).not.toContain('secret-token')
+      expect(JSON.stringify(result)).not.toContain('/Users/private')
+    }
+  })
+
   it('keeps the first initial error ahead of cascading checks and redacts its source', async () => {
     const root = await directory()
     const title = join(root, 'title'); await mkdir(title)

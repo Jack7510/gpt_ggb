@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -17,23 +17,41 @@ import { createApiHandler } from '../../api/src/routes/v3.js'
 import { PluginCoreRunAdapter } from '../../client/src/runtime/plugin-core-adapter.js'
 import { pluginViewState } from '../../client/src/runtime/plugin-core-projector.js'
 import { failureMessage } from '../../client/src/app/failure-message.js'
+import { buildFailure } from '../src/plugin-core/failure-details.js'
 
 const secret = 'a'.repeat(64)
 const completed = { kind: 'completed' as const, exitCode: 0, signal: null, cleanupConfirmed: true,
   stdoutBytes: 0, stderrBytes: 0, stdoutTail: '', stderrTail: '' }
 
 describe('build failure through Worker, authenticated channel, API, store and client', () => {
-  it.each(['not_built', 'structure_rejected', 'execution_failed', 'verification_failed', 'sdk_failed_after_build'] as const)(
+  it.each(['not_built', 'structure_rejected', 'execution_failed', 'verification_failed', 'sdk_failed_after_build', 'expression_unverified'] as const)(
     'preserves actual evidence for %s, including terminal SSE reconnect', async mode => {
       const root = await mkdtemp(join(tmpdir(), 'build-failure-flow-'))
       const state = new PluginCoreExecutionState(root)
       let builds = 0
       let lastBuildId: string | undefined
+      let toolResult: Awaited<ReturnType<PluginCoreGateway['dispatch']>> | undefined
+      const reason = 'expression unverified: probe returned line (defined=false); expected boolean'
       const gateway = new PluginCoreGateway({ check: async () => ({ ok: true }),
         reference: async () => ({ topic: 'request', content: 'fixture' }),
         build: async (_request, _runId, _signal, _base, call) => {
           builds += 1
           lastBuildId = call!.buildId
+          if (mode === 'expression_unverified') {
+            const directory = join(root, lastBuildId!)
+            await mkdir(directory)
+            const check = { requirementId: 'triangle', checkId: 'triangle:3', method: 'expression',
+              status: 'unverified', evidence: { message: reason,
+                observation: { type: 'line', defined: false, expression: 'private-expression',
+                  error: '/Users/private/report', result: 'unrelated-user-data' }, objects: ['private-object'] } }
+            await writeFile(join(directory, 'run.json'), JSON.stringify({ state: 'failed', error: {
+              code: 'verification_unverified', message: 'Required checks did not pass',
+              details: { cause: [{ ...check, evidence: {} }] },
+            } }))
+            await writeFile(join(directory, 'verification.json'), JSON.stringify({ construction: { results: [check] } }))
+            return { ok: false, buildPhase: 'execution', execution: completed,
+              error: await buildFailure(directory, { code: 'verification_unverified', message: 'Failed' }, '') }
+          }
           return { ok: false, buildPhase: mode === 'structure_rejected' ? 'preflight' : 'execution',
             execution: mode === 'execution_failed' ? { ...completed, exitCode: 1 } : completed,
             error: { code: mode === 'structure_rejected' ? 'invalid_request' : 'verification_failed',
@@ -45,7 +63,7 @@ describe('build failure through Worker, authenticated channel, API, store and cl
         } }, { state })
       const dsh = { run: async (request: { runId: ReturnType<typeof runIdSchema.parse> }) => {
         const calls = mode === 'not_built' ? 0 : mode === 'verification_failed' ? 4 : 1
-        for (let i = 0; i < calls; i++) await gateway.dispatch({ toolName: 'ggb_build', runId: request.runId,
+        for (let i = 0; i < calls; i++) toolResult = await gateway.dispatch({ toolName: 'ggb_build', runId: request.runId,
           turnId: randomUUID(), epoch: 1, arguments: {} })
         const result = { finalResponse: 'Unable to deliver', events: [
           { type: 'tool/call', data: { name: calls ? 'ggb_build' : 'ggb_inspect' } },
@@ -79,7 +97,7 @@ describe('build failure through Worker, authenticated channel, API, store and cl
         }
         expect(view.phase).toBe('failed')
         const details = view.failure!.details!
-        expect(details.kind).toBe(mode === 'sdk_failed_after_build' ? 'verification_failed' : mode)
+        expect(details.kind).toBe(['sdk_failed_after_build', 'expression_unverified'].includes(mode) ? 'verification_failed' : mode)
         expect(details.lastBuildId).toBe(lastBuildId)
         expect(view.failure!.message).not.toMatch(/last build was rejected by verification/)
         expect(view.failure!.message).not.toContain(view.failure!.code)
@@ -87,6 +105,13 @@ describe('build failure through Worker, authenticated channel, API, store and cl
         if (mode === 'verification_failed') {
           expect(builds).toBe(3) // fourth request is a quota rejection, not a new build
           expect(details.failedChecks[0]?.checkId).toBe('shape:3')
+        }
+        if (mode === 'expression_unverified') {
+          expect(toolResult?.report?.issueCount).toBe(1)
+          expect(toolResult?.report?.failedChecks[0]?.reason).toBe(reason)
+          expect(toolResult?.errors[0]?.message).toContain(reason)
+          expect(details.failedChecks[0]?.reason).toBe(reason)
+          expect(JSON.stringify(toolResult)).not.toMatch(/private-expression|private-object|unrelated-user-data|\/Users\//)
         }
         const event = (await store.listEvents(runId, 0, 20)).find(e => e.payload.type === 'plugin_core.failed')!
         expect(event.payload).toMatchObject({ details })
@@ -99,7 +124,7 @@ describe('build failure through Worker, authenticated channel, API, store and cl
         }, new AbortController().signal)
         expect(notices).toHaveLength(1)
         if (mode !== 'not_built') expect(notices[0]).toContain(lastBuildId)
-        if (details.kind === 'verification_failed') expect(notices[0]).toContain('Expected a line')
+        if (details.kind === 'verification_failed') expect(notices[0]).toContain(mode === 'expression_unverified' ? reason : 'Expected a line')
         expect(state.buildFailure(runId).kind).toBe('not_built') // result survives resource release
       } finally {
         service.stopAll(); await service.waitForSettlements(1000); await server.close(); dispatch.close(); await channel.close()

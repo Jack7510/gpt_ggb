@@ -274,8 +274,9 @@ describe('plugin-core PWA integration', () => {
     const { runtime, fetchMock } = harness(true)
     const details = { kind: 'verification_failed' as const, lastBuildId: '11111111-1111-4111-8111-111111111111',
       error: { code: 'verification_failed', message: 'Required checks did not pass' },
-      failedChecks: [{ requirementId: 'shape', checkId: 'shape:2', method: 'perpendicular', status: 'unverified' }],
-      reasons: ['shape/shape:2: Expected a line: side (segment)'] }
+      failedChecks: [{ requirementId: 'shape', checkId: 'shape:2', method: 'expression', status: 'unverified',
+        reason: 'expression unverified: probe returned line (defined=false); expected boolean' }],
+      reasons: ['shape/shape:2: expression unverified: probe returned line (defined=false); expected boolean'] }
     const failure = { code: 'plugin_core_no_delivery', message: 'The last build did not satisfy verification.', details }
     const notices: string[] = []
     let gets = 0
@@ -293,8 +294,9 @@ describe('plugin-core PWA integration', () => {
       await runtime.setProviderKey('fake')
       const sessionId = await runtime.createSession()
       await runtime.sendMessage(sessionId, 'draw')
-      await vi.waitFor(() => expect(notices.some(notice => notice.includes('Expected a line'))).toBe(true))
+      await vi.waitFor(() => expect(notices.some(notice => notice.includes('probe returned line'))).toBe(true))
       expect(notices.at(-1)).toContain(details.lastBuildId)
+      expect(notices.at(-1)).toContain('probe returned line (defined=false); expected boolean')
       expect(notices.at(-1)?.match(/plugin_core_no_delivery/g)).toHaveLength(1)
       expect((await runtime.view(sessionId)).runs[0]?.failure?.details).toEqual(details)
     } finally { dispose(); runtime.dispose() }

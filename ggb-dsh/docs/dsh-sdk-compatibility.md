@@ -169,6 +169,17 @@ SDK TransportClosedError 的公开消息是当前版本暴露退出状态与 std
 
 进程树所有权、槽位隔离、回执生成与原子交付见下文。不能只凭父进程 close 提前删除活跃资源。
 
+### expression 失败反馈
+
+插件从真实 probe 与绑定的请求生成最多 256 字符的 `evidence.message`。
+它说明实际类型、定义状态、期望类型和失败类别；缺失观测使用 unknown。
+Worker 保留这条有界消息，丢弃原始 observation、对象快照和 XML；深层 cause 中的
+标量消息也必须保留。相同 check 的重复记录可补齐缺失原因，不重复计数。
+
+工具结果 `report.failedChecks[].reason`、run failure 的同名字段及 reasons 使用同一摘要。
+API 持久化、实时 SSE 和重连快照保留这些既有字段，Client 使用现有 failureMessage 显示。
+没有新增通道字段或改变协议版本；诊断不能改变失败状态、构建配额或可信交付准入。
+
 ### 离线复现与证据
 
 从 ggb-dsh 目录运行，路径必须指向由本次 TGZ 安装得到的包根：

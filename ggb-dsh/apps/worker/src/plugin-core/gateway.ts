@@ -283,7 +283,7 @@ function buildReport(result: PluginCoreRunResult, buildId?: string): PluginCoreT
 function verificationHint(details: unknown): string | null {
   const scan = scanChecks(details, 3)
   const summary = scan.failedChecks
-    .map(check => `${check.checkId} ${check.method} ${check.status}`).join('; ')
+    .map(check => `${check.checkId} ${check.method} ${check.status}${check.reason ? `: ${check.reason}` : ''}`).join('; ')
   return summary.length === 0 ? null : summary.slice(0, 600)
 }
 
@@ -308,15 +308,20 @@ function scanChecks(details: unknown, limit = 12): CheckScan {
     if (requirement !== null && check !== null && status !== null && status !== 'passed') {
       const method = typeof record.method === 'string' ? record.method : 'check'
       const key = `${check}:${method}:${status}`
+      const evidence = isRecord(record.evidence) ? record.evidence : null
+      const reason = typeof evidence?.message === 'string' && evidence.message !== '[depth_limit]'
+        ? evidence.message.slice(0, 256) : undefined
       if (!seen.has(key)) {
         seen.add(key)
         issueCount += 1
         if (failedChecks.length < limit) {
-          const evidence = isRecord(record.evidence) ? record.evidence : null
-          const reason = typeof evidence?.message === 'string' ? evidence.message : undefined
           failedChecks.push({ requirementId: requirement, checkId: check, method, status,
             ...(reason === undefined ? {} : { reason }) })
         }
+      } else if (reason !== undefined) {
+        const index = failedChecks.findIndex(item => item.checkId === check && item.method === method && item.status === status)
+        const previous = failedChecks[index]
+        if (previous && previous.reason === undefined) failedChecks[index] = { ...previous, reason }
       }
     }
     for (const item of Object.values(record)) visit(item, depth + 1)
