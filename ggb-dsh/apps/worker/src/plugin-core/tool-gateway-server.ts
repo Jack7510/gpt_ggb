@@ -3,6 +3,7 @@ import { chmodSync, existsSync, statSync, unlinkSync } from 'node:fs'
 import { createConnection, createServer, type Server, type Socket } from 'node:net'
 import type { RunId } from '@ggb-copilot/application'
 import { PluginCoreGateway, type PluginCoreToolName, type PluginCoreToolResult } from './gateway.js'
+import { PluginCoreReferenceHistory } from './reference-history.js'
 import { type PluginCoreEvidenceStore } from './evidence.js'
 import { type HostToolProtocol, type HostToolRequest, type HostToolResponse, type HostDraftSession } from './tool-protocol.js'
 
@@ -17,6 +18,7 @@ interface TurnBinding {
   readonly runId: RunId
   readonly epoch: number
   readonly draft: HostDraftSession
+  readonly references: PluginCoreReferenceHistory
   readonly token: Buffer
   readonly abort: AbortController
   readonly signal?: AbortSignal
@@ -52,7 +54,9 @@ export class PluginCoreToolGatewayServer {
     const onAbort = (): void => abort.abort()
     signal?.addEventListener('abort', onAbort, { once: true })
     if (signal?.aborted === true) abort.abort()
-    this.bindings.set(turnId, { runId, epoch, draft: this.protocol.createDraft(prompt), token: Buffer.from(token, 'hex'), abort,
+    this.bindings.set(turnId, { runId, epoch, draft: this.protocol.createDraft(prompt),
+      references: new PluginCoreReferenceHistory(this.protocol.preloadedReferenceTopics, this.protocol.maxReferenceBytes),
+      token: Buffer.from(token, 'hex'), abort,
       ...(signal === undefined ? {} : { signal, onAbort }) })
     this.options.evidence?.begin(runId, turnId, epoch, [token])
     return token
@@ -173,6 +177,7 @@ export class PluginCoreToolGatewayServer {
         toolName: request.toolName, runId: request.runId, turnId: request.turnId,
         epoch: request.epoch, arguments: this.protocol.arguments(request),
         draftSession: this.bindings.get(request.turnId)!.draft,
+        referenceHistory: this.bindings.get(request.turnId)!.references,
         wireArguments: request.arguments, argumentsDigest: request.argumentsDigest,
         requestId: request.requestId, toolCallId: request.toolCallId, protocolVersion: this.protocol.version,
       }, AbortSignal.any([signal, this.bindings.get(request.turnId)!.abort.signal]))

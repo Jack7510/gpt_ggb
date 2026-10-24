@@ -509,8 +509,19 @@ Worker 的 `request` 参考和首轮系统提示使用安装包内同一份
 `references/worker-request.md`。CLI 的完整请求信封不进入该主题。
 简单任务可直接按注入契约提交；有知识缺口时只读取相关的 1–2 个主题，通常累计不超过 3 个。
 这不降低工具可读取的六主题上限，也不豁免基线检查。
-派生对象必须声明对定义输入的 `dependsOn` 检查；当前坐标正确不能代替依赖验收。
+安装包通过 `PRELOADED_REFERENCE_TOPICS` 声明已注入的完整主题；未声明时宿主不假定已注入。
+Worker 在每个认证 turn 内只保存已读主题标识，重复读取返回 `alreadyAvailable`，不重复附带正文。
+混合批次只读取缺失主题，仍保留原始调用身份、鉴权、逐调用证据和进度事件。
+只有完整主题的身份、正文和最终序列化字节数通过检查后才更新记录；失败读取不改变记录。
+关闭 turn 即销毁记录，不跨 run、turn 或 epoch 复用。上下文压缩后确实丢失正文时，
+模型可用 `refresh:true` 显式重读；该参数必须附带固定主题，不允许任意路径或超限响应。
+派生对象必须用 `dependsOn` 覆盖每条关系的全部定义输入，不能只保留滑块依赖；
+当前坐标正确不能代替依赖验收。
 工具验证已声明的检查，不负责从任意题目自动补全遗漏条件。
+`type` 检查使用 `objectType`，`expected` 只用于 `expression`。
+requirement 的 `source` 逐字引用用户原文、转写或已确认回答，显示美化只放在 `caption`。
+固定 GeoGebra 5.4.932.1 把精确同名 caption 存成空默认值；核验仅在请求 caption
+等于精确对象名且实际读回为空时按等价处理，仍检查标签模式。自定义 caption 不放宽。
 
 Worker 必须在等待整个 RunResult 前通过 SDK 支持的通知接口采集有界事件。采集异常不能清空已经取得的
 事实。每个工具调用在准入、开始和结束处登记 requestId、toolCallId、buildId 及可用 SDK 映射。
@@ -523,7 +534,7 @@ Worker 必须在等待整个 RunResult 前通过 SDK 支持的通知接口采集
 
 | 字段 | 来源与含义 |
 | --- | --- |
-| `timing.requestSentMs / responseHeadersMs` | SDK stream 开始至发送 wire 请求／收到 HTTP 响应头的实测偏移，单位 ms |
+| `timing.requestSentMs / responseHeadersMs` | SDK stream 开始至调用 Provider `POST /messages` 的原始 fetch／收到该请求响应头的实测偏移，单位 ms；请求元数据采集在发送时间点之前完成 |
 | `timing.firstByteMs / firstEventMs` | 第一个非空响应字节块／可解析 SSE 事件；心跳字节不代表模型已生成内容 |
 | `timing.firstContentMs / firstThinkingMs / firstTextMs / firstToolInputMs` | 首个非空内容及各内容类别的实测偏移；空起始块和签名不算内容 |
 | `timing.lastContentMs / streamEndMs` | 最后一个非空内容／`message_stop` 事件的实测偏移 |
@@ -531,6 +542,7 @@ Worker 必须在等待整个 RunResult 前通过 SDK 支持的通知接口采集
 | `content.thinking / text / toolInput` | 各类 `starts`、`deltas` 和 UTF-8 `bytes`，包含非空起始内容，不记录正文或签名 |
 
 未收到的时间为 null。取消和异常不伪造 `message_stop`；零字节计数仅表示未观测到内容。
+同一 origin 的图片、其他路径、GET 及其他 origin 的响应不写入该轮的 Provider 时间点或状态。
 字节数不是 token 数，首尾内容间隔不是纯推理耗时，不能据此推测模型决策。
 结合既有请求上下文字节、用量和工具开始／结束账本，区分模型流与工具执行开销。
 诊断限额、写入失败和未知 block 不改变流内容、任务预算或模型策略。

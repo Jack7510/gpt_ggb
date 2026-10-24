@@ -26,9 +26,9 @@ export class ProviderToolStream {
   private responseStatus: number | null = null
   sdkRequest(input: unknown): void { this.sdkContract = providerRequestFacts(input, 'sdk') }
   providerRequest(input: unknown): void {
-    this.performance.mark('requestSentMs')
     this.wireContract = providerRequestFacts(input, 'messages')
   }
+  requestSent(): void { this.performance.mark('requestSentMs') }
   httpStatus(status: number): void { this.responseStatus = status; this.performance.mark('responseHeadersMs') }
   finish(): void { this.finishedAt ??= Date.now() }
   private buffer = ''

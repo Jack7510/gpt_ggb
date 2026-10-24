@@ -23,7 +23,9 @@ export interface HostDraftSession {
 }
 export interface HostToolProtocol {
   readonly version: 3
+  readonly preloadedReferenceTopics?: readonly string[]
   readonly maxFrameBytes: number
+  readonly maxReferenceBytes?: number
   createDraft(prompt: string): HostDraftSession
   parse(input: unknown): HostToolRequest
   authenticate(token: string, request: HostToolRequest): boolean
@@ -38,7 +40,12 @@ export async function loadInstalledToolProtocol(pluginRoot: string): Promise<Hos
   if (typeof drafts.RequestDraft !== 'function') throw new Error('plugin_core_draft_exports_invalid')
   if (module.HOST_PROTOCOL_VERSION !== 3 || typeof module.parseToolRequest !== 'function'
     || typeof module.authenticateRequest !== 'function') throw new Error('plugin_core_protocol_exports_invalid')
-  return { version: 3, maxFrameBytes: module.LIMITS.frameBytes,
+  const preloaded = module.PRELOADED_REFERENCE_TOPICS === undefined ? [] : module.PRELOADED_REFERENCE_TOPICS
+  if (!Array.isArray(preloaded) || !preloaded.every(topic => typeof topic === 'string' && module.REFERENCE_TOPICS.includes(topic))) {
+    throw new Error('plugin_core_reference_contract_invalid')
+  }
+  return { version: 3, preloadedReferenceTopics: preloaded, maxFrameBytes: module.LIMITS.frameBytes,
+    maxReferenceBytes: module.LIMITS.referenceBytes,
     createDraft: prompt => new drafts.RequestDraft(prompt),
     parse(input) { const value = module.parseToolRequest(input); runIdSchema.parse(value.runId); return value },
     authenticate: module.authenticateRequest,

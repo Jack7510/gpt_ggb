@@ -42,7 +42,7 @@ describe('wire diagnostics across a real SDK Server', () => {
     const runId = runIdSchema.parse(`run_${randomUUID()}`); const turnId = randomUUID()
     const gateway = new PluginCoreToolGatewayServer(join(root, 'tools.sock'), new PluginCoreGateway({
       check: async () => { throw new Error('must not check') },
-      reference: async () => { calls++; return { topic: 'patterns' } },
+      reference: async () => { calls++; return { topic: 'patterns', content: 'fixture reference' } },
       build: async () => { throw new Error('must not build') },
     }), 1000, { protocol: toolProtocol })
     await gateway.listen()
@@ -53,7 +53,7 @@ describe('wire diagnostics across a real SDK Server', () => {
         evidence: new PluginCoreEvidenceStore(root) }, gateway)
       const result = await runner.run({ runId, turnId, epoch: 1, providerKey: 'fake-local-only', prompt: 'fixture', baseAttached: false })
       expect(result.finalResponse).toBe('done')
-      expect(calls).toBe(toolCalls)
+      expect(calls).toBe(1) // Repeated authenticated calls reuse the existing reference context.
       expect(requests).toBe(toolCalls + 1)
       const stream = JSON.parse(await readFile(join(root, runId, 'diagnostics', `${turnId}.stream.json`), 'utf8'))
       expect(stream.requests).toHaveLength(EVIDENCE_LIMITS.calls)

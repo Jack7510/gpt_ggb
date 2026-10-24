@@ -9,10 +9,13 @@ if (path) {
   Object.assign(globalThis, { [Symbol.for('ggb.providerStreamEvidence')]: evidence })
   globalThis.fetch = async (input, init) => {
     const url = new URL(input instanceof Request ? input.url : String(input))
-    const capture = evidence.scope.getStore()
-    if (capture && url.origin === origin && url.pathname.endsWith('/messages') && typeof init?.body === 'string') {
+    const method = init?.method ?? (input instanceof Request ? input.method : 'GET')
+    const capture = url.origin === origin && url.pathname.endsWith('/messages') && method.toUpperCase() === 'POST'
+      ? evidence.scope.getStore() : undefined
+    if (capture && typeof init?.body === 'string') {
       try { capture.providerRequest(JSON.parse(init.body)) } catch { /* Never mutate a request. */ }
     }
+    capture?.requestSent()
     const response = await original(input, init)
     capture?.httpStatus(response.status)
     if (!capture || url.origin !== origin || !url.pathname.endsWith('/messages') || !response.ok || !response.body) return response

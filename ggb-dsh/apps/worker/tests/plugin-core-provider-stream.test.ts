@@ -23,6 +23,7 @@ describe('wire versus public SDK tool stream evidence', () => {
       const capture = new ProviderToolStream(1, [])
       clock.mockReturnValue(1010)
       capture.providerRequest({})
+      capture.requestSent()
       clock.mockReturnValue(1100)
       capture.httpStatus(200)
       clock.mockReturnValue(1120)

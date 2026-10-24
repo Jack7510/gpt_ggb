@@ -1,4 +1,5 @@
 import type { HostDraftSession } from './tool-protocol.js'
+import type { PluginCoreReferenceHistory } from './reference-history.js'
 import { summarizeBuildFailure } from './build-failure-summary.js'
 import type { PluginCoreExecutionState } from './execution-state.js'
 import { randomUUID } from 'node:crypto'
@@ -28,6 +29,7 @@ export interface PluginCoreToolRequest {
   readonly argumentsDigest?: string
   readonly protocolVersion?: 3
   readonly draftSession?: HostDraftSession
+  readonly referenceHistory?: PluginCoreReferenceHistory
   readonly wireArguments?: unknown
   /** The plugin request object. The runner removes any model-supplied output path. */
   readonly arguments: unknown
@@ -166,7 +168,7 @@ export class PluginCoreGateway {
       tool: request.toolName, status: 'started', callId })
     const base = this.options.bases?.get(runId)
     if (request.toolName === 'ggb_inspect') {
-      const args = pluginRequest as { reference?: unknown; references?: unknown } | null
+      const args = pluginRequest as { reference?: unknown; references?: unknown; refresh?: unknown } | null
       if (args?.references !== undefined) {
         if (args.reference !== undefined || !Array.isArray(args.references)
           || !args.references.every(topic => typeof topic === 'string') || !this.runner.references) {
@@ -174,7 +176,9 @@ export class PluginCoreGateway {
         }
         await call?.update('started', { operation: 'reference', topics: args.references })
         try {
-          const result = await this.runner.references(args.references)
+          const result = request.referenceHistory
+            ? await request.referenceHistory.read(args.references, topics => this.runner.references!(topics), args.refresh === true)
+            : await this.runner.references(args.references)
           await call?.result({ ok: true, check: result })
           return { status: 'accepted', toolName: 'ggb_inspect', errors: [], result }
         } catch (error) {
@@ -190,7 +194,9 @@ export class PluginCoreGateway {
           return this.rejected('ggb_inspect', 'reference_unavailable', 'Reference topic is unavailable.')
         }
         await call?.update('started', { operation: 'reference' })
-        const result = await this.runner.reference(args.reference)
+        const result = request.referenceHistory
+          ? await request.referenceHistory.read([args.reference], topics => this.runner.reference!(topics[0]!), args.refresh === true)
+          : await this.runner.reference(args.reference)
         await call?.result({ ok: true, check: result })
         return { status: 'accepted', toolName: 'ggb_inspect', errors: [], result }
       }

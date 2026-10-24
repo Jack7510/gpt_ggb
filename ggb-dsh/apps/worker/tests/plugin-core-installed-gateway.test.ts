@@ -38,7 +38,7 @@ async function installed() {
   const installation = await import(pathToFileURL(require.resolve('ggb-plugins-dsh/installation')).href)
   return { tools, schemas, installation }
 }
-async function harness(prompt = '') {
+async function harness(prompt = '', preloadedReferenceTopics?: readonly string[]) {
   const plugin = await installed()
   const dir = await mkdtemp(join(tmpdir(), 'ggb-host2-')); dirs.push(dir)
   const runId = runIdSchema.parse(`run_${randomUUID()}`)
@@ -50,7 +50,8 @@ async function harness(prompt = '') {
     check: vi.fn(async (..._args: Parameters<InstalledPluginCoreRunner['check']>): Promise<PluginCoreRunResult> => ({ ok: true, check: { validation: 'structural' } })),
     build: vi.fn(async (): Promise<PluginCoreRunResult> => ({ ok: true })),
   }
-  const protocol = { protocol: await loadInstalledToolProtocol(installedRoot!) }
+  const protocol = { protocol: { ...await loadInstalledToolProtocol(installedRoot!),
+    ...(preloadedReferenceTopics === undefined ? {} : { preloadedReferenceTopics }) } }
   const server = new PluginCoreToolGatewayServer(join(dir, 'host.sock'),
     new PluginCoreGateway(runner, { evidence }), 2000, { evidence, ...protocol })
   servers.push(server); await server.listen()
@@ -60,7 +61,14 @@ async function harness(prompt = '') {
     GGB_PLUGIN_CORE_TOOL_RUN_ID: runId, GGB_PLUGIN_CORE_TOOL_TURN_ID: turnId,
     GGB_PLUGIN_CORE_TOOL_EPOCH: '1', GGB_PLUGIN_CORE_TOOL_TOKEN: token })) vi.stubEnv(key, value)
   const ledger = async () => JSON.parse(await readFile(join(dir, runId, 'diagnostics', `${turnId}.json`), 'utf8'))
-  return { dir, runId, turnId, evidence, runner, server, token, ledger, ...plugin }
+  return { dir, runId, turnId, evidence, runner, server, token, ledger,
+    preloaded: protocol.protocol.preloadedReferenceTopics ?? [], ...plugin }
+}
+function expectedReferences(h: Awaited<ReturnType<typeof harness>>, topics: string[]) {
+  const unique = [...new Set(topics)]
+  const alreadyAvailable = unique.filter(topic => h.preloaded.includes(topic))
+  return { ...h.installation.loadReferences(unique.filter(topic => !h.preloaded.includes(topic))),
+    ...(alreadyAvailable.length ? { alreadyAvailable } : {}) }
 }
 async function send(path: string, value: unknown): Promise<string> {
   return await new Promise((resolve, reject) => {
@@ -82,11 +90,32 @@ async function prepare(h: Awaited<ReturnType<typeof harness>>) {
 }
 
 describe.skipIf(!installedRoot)('installed protocol 2 to the host (no SDK turn/provider)', () => {
+  it('deduplicates preloaded, single and batch topics inside one authenticated turn only', async () => {
+    const h = await harness('', ['request'])
+    expect(await h.tools.createTool('ggb_inspect').execute({ reference: 'request' }, context()))
+      .toMatchObject({ status: 'accepted', result: { alreadyAvailable: ['request'] } })
+    expect(h.runner.reference).not.toHaveBeenCalled()
+    expect(await h.tools.createTool('ggb_inspect').execute({ references: ['program', 'request', 'program'] }, context()))
+      .toMatchObject({ status: 'accepted', result: { references: [{ topic: 'program' }], alreadyAvailable: ['request'] } })
+    expect(h.runner.references).toHaveBeenCalledWith(['program'])
+    expect(await h.tools.createTool('ggb_inspect').execute({ reference: 'program' }, context()))
+      .toMatchObject({ status: 'accepted', result: { alreadyAvailable: ['program'] } })
+    expect(h.runner.reference).not.toHaveBeenCalled()
+    expect((await h.ledger()).calls).toHaveLength(3)
+    const nextTurn = randomUUID()
+    const nextToken = h.server.openTurn(h.runId, nextTurn, 2)
+    vi.stubEnv('GGB_PLUGIN_CORE_TOOL_TURN_ID', nextTurn)
+    vi.stubEnv('GGB_PLUGIN_CORE_TOOL_EPOCH', '2')
+    vi.stubEnv('GGB_PLUGIN_CORE_TOOL_TOKEN', nextToken)
+    expect(await h.tools.createTool('ggb_inspect').execute({ reference: 'program' }, context()))
+      .toMatchObject({ status: 'accepted', result: { topic: 'program', content: expect.any(String) } })
+    expect(h.runner.reference).toHaveBeenCalledOnce()
+  })
   it('returns all six complete references through one authenticated tool call', async () => {
     const h = await harness()
     const topics = ['request', 'program', 'verification', 'interactions', 'patterns', 'naming']
     expect(await h.tools.createTool('ggb_inspect').execute({ references: topics }, context()))
-      .toEqual({ status: 'accepted', toolName: 'ggb_inspect', errors: [], result: h.installation.loadReferences(topics) })
+      .toEqual({ status: 'accepted', toolName: 'ggb_inspect', errors: [], result: expectedReferences(h, topics) })
     expect(h.runner.references).toHaveBeenCalledOnce()
     expect((await h.ledger()).calls).toHaveLength(1)
     expect(h.runner.build).not.toHaveBeenCalled()
@@ -96,7 +125,7 @@ describe.skipIf(!installedRoot)('installed protocol 2 to the host (no SDK turn/p
     const args = { references: ['request', 'verification', 'request'] }
     const result = await h.tools.createTool('ggb_inspect').execute(args, context())
     expect(result).toEqual({ status: 'accepted', toolName: 'ggb_inspect', errors: [],
-      result: h.installation.loadReferences(args.references) })
+      result: expectedReferences(h, args.references) })
     expect(h.runner.references).toHaveBeenCalledOnce()
     expect(h.runner.reference).not.toHaveBeenCalled()
     expect((await h.ledger()).calls[0]).toMatchObject({ arguments: args, operation: 'reference', stage: 'accepted' })
@@ -112,12 +141,12 @@ describe.skipIf(!installedRoot)('installed protocol 2 to the host (no SDK turn/p
   it('rejects an oversized batch without truncation and permits a smaller next read', async () => {
     const h = await harness()
     h.runner.references.mockRejectedValueOnce(new Error('ggb_reference_response_oversized'))
-    expect(await h.tools.createTool('ggb_inspect').execute({ references: ['request'] }, context()))
+    expect(await h.tools.createTool('ggb_inspect').execute({ references: ['program'] }, context()))
       .toMatchObject({ status: 'rejected', result: null, errors: [{ code: 'reference_limit_exceeded' }] })
     expect((await h.ledger()).calls[0]).toMatchObject({ stage: 'rejected',
       error: { message: 'ggb_reference_response_oversized' } })
-    expect(await h.tools.createTool('ggb_inspect').execute({ references: ['request'] }, context()))
-      .toMatchObject({ status: 'accepted', result: { references: [{ topic: 'request', content: expect.any(String) }] } })
+    expect(await h.tools.createTool('ggb_inspect').execute({ references: ['program'] }, context()))
+      .toMatchObject({ status: 'accepted', result: { references: [{ topic: 'program', content: expect.any(String) }] } })
   })
 
   it('returns real executor check arity details to the tool and accepts a corrected revision', async () => {
@@ -145,7 +174,7 @@ describe.skipIf(!installedRoot)('installed protocol 2 to the host (no SDK turn/p
         .toMatchObject({ status: 'accepted' })
     }
     const ledger = await h.ledger()
-    expect(h.runner.reference).toHaveBeenCalledTimes(70)
+    expect(h.runner.reference).toHaveBeenCalledTimes(1)
     expect(ledger.calls).toHaveLength(64)
     expect(ledger).toMatchObject({ callLimitReached: true, callsDropped: 6 })
     expect(ledger.calls[63]).toMatchObject({ stage: 'accepted', sdkCorrelation: 'unavailable', correlationLimited: true })
