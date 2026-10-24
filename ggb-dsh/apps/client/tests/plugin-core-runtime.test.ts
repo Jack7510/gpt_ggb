@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { interactionSummary } from '../src/app/interaction-summary.js'
 import { createDirectAppletPort } from '../src/geogebra/host.js'
 import { ClientRuntime, type ClientRuntimeOptions } from '../src/app/runtime.js'
 import type { CanvasSnapshot, GeogebraAppletPort } from '../src/geogebra/host.js'
@@ -281,6 +282,7 @@ describe('plugin-core PWA integration', () => {
     const construction = { schemaVersion: 1, origin: 'host-accepted-build', buildId: binding.buildId,
       domainRequestDigest: binding.domainRequestDigest, baseSha256: null, text: '1. [algebra] O\nO=(0,0)\n' }
     const completed = { ...view('completed'), delivery: { ...view('completed').delivery!, construction,
+      verification: { interaction: { status: 'not_sampled', samples: 0 } },
       trustedBuild: { binding, receipt: {}, receiptSha256: 'c'.repeat(64) } } }
     let gets = 0
     fetchMock.mockImplementation(async (input, init) => {
@@ -301,7 +303,10 @@ describe('plugin-core PWA integration', () => {
       expect((await runtime.view(second)).constructionReports).toEqual({})
       fetchMock.mockRejectedValue(new Error('offline'))
       await runtime.openSession(second)
-      expect((await runtime.openSession(first)).constructionReports[localRunId]).toEqual(construction)
+      const restored = await runtime.openSession(first)
+      expect(restored.constructionReports[localRunId]).toEqual(construction)
+      expect(restored.delivery?.verification).toEqual(completed.delivery.verification)
+      expect(interactionSummary(restored.delivery?.verification, 'zh-CN')).toContain('未采样')
     } finally { runtime.dispose() }
   })
 

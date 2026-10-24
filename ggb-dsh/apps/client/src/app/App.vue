@@ -47,6 +47,7 @@
         <li v-if="view?.delivery" class="delivery-card" data-test="plugin-delivery" :data-run-id="view.delivery.runId">
           <div class="message-heading"><span class="who">GGB</span><span class="message-run">{{ view.delivery.sha256.slice(0, 12) }}</span></div>
           <p>{{ view.delivery.bytes }} bytes · {{ view.delivery.usage === null ? 'usage unknown' : `${view.delivery.usage.calls} calls / ${view.delivery.usage.inputTokens ?? '?'} in / ${view.delivery.usage.outputTokens ?? '?'} out` }}</p>
+          <p data-test="interaction-summary">{{ interactionSummary(view.delivery.verification, locale) }}</p>
           <button type="button" data-test="download-ggb" @click="downloadDelivery">下载 GGB</button>
           <span class="hint">继续输入修改指令时，将以当前画布为基线。</span>
         </li>
@@ -90,6 +91,7 @@ import { credentialRequiredNotice, describeRunStatus } from './run-status.js'
 import { text } from './localization.js'
 import { ComposerImages, clipboardImage } from './composer-images.js'
 import type { PluginCoreConstructionRecord } from '@ggb-copilot/application/browser'
+import { interactionSummary } from './interaction-summary.js'
 import { ConstructionRecord } from './construction-record.js'
 import { copyMessageContent } from './copy-message.js'
 

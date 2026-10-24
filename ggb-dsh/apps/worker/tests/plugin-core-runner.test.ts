@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { PluginCoreProcessRunner } from '../src/plugin-core/process-runner.js'
+import { PluginCoreProcessRunner, summarizeVerification } from '../src/plugin-core/process-runner.js'
 const dirs: string[] = []
 afterEach(async () => { for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true }) })
 async function execute(script: string, timeout = 2000) {
@@ -23,4 +23,13 @@ describe('bounded installed process transport', () => {
   it('terminates a timed out process and proves cleanup', async () => {
     expect((await execute('setInterval(()=>{},1000)', 50)).evidence).toMatchObject({ kind: 'timeout', cleanupConfirmed: true })
   })
+})
+
+it('projects zero samples as not_sampled without changing failures or missing evidence', () => {
+  expect(summarizeVerification({ interaction: { status: 'passed', samples: [] } }).interaction)
+    .toEqual({ status: 'not_sampled', samples: 0 })
+  expect(summarizeVerification({ interaction: { status: 'passed', samples: [{}] } }).interaction)
+    .toEqual({ status: 'passed', samples: 1 })
+  expect(summarizeVerification({ interaction: { status: 'failed', samples: [] } }).interaction.status).toBe('failed')
+  expect(summarizeVerification({}).interaction.status).toBe('unknown')
 })

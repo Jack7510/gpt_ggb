@@ -178,7 +178,9 @@ export function summarizeVerification(value: unknown): PluginCoreVerification {
   const interaction = report.interaction !== null && typeof report.interaction === 'object'
     ? report.interaction as Record<string, unknown> : {}
   return { construction: phase(report.construction), reload: phase(report.reload),
-    interaction: { status: typeof interaction.status === 'string' ? interaction.status : 'unknown',
+    interaction: { status: Array.isArray(interaction.samples) && interaction.samples.length === 0
+      && interaction.status === 'passed' ? 'not_sampled'
+      : typeof interaction.status === 'string' ? interaction.status : 'unknown',
       samples: Array.isArray(interaction.samples) ? interaction.samples.length : 0 } }
 }
 
