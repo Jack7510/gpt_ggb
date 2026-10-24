@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { interactionSummary } from '../src/app/interaction-summary.js'
 import { createDirectAppletPort } from '../src/geogebra/host.js'
 import { ClientRuntime, type ClientRuntimeOptions } from '../src/app/runtime.js'
-import type { CanvasSnapshot, GeogebraAppletPort } from '../src/geogebra/host.js'
+import type { CanvasSummary, CanvasSnapshot, GeogebraAppletPort } from '../src/geogebra/host.js'
 import { createMemoryDatabase } from '../src/persistence/indexeddb.js'
 import { createMemoryArtifactStore } from '../src/persistence/opfs-artifacts.js'
 
@@ -123,10 +123,164 @@ function harness(readyOnly = false, suppliedApplet?: GeogebraAppletPort) {
     }),
     locks: { request: async (_name, _options, callback) => callback({}) },
   } satisfies ClientRuntimeOptions)
-  return { runtime, requests, applet, db, fetchMock }
+  return { runtime, requests, applet, db, fetchMock, artifacts }
+}
+
+function selectionHarness() {
+  let summary: CanvasSummary = { objects: [], selectedLabels: [], objectsTruncated: false }
+  const snapshot = () => ({ canvasVersion: 'v0', contentDigest: JSON.stringify(summary.objects),
+    contentBase64: Buffer.from('PK' + JSON.stringify(summary.objects)).toString('base64') })
+  const port: GeogebraAppletPort = { ready: async () => {}, currentVersion: async () => 'v0',
+    context: async () => structuredClone(summary), snapshot: vi.fn(async () => snapshot()),
+    restore: async content => {
+      const text = Buffer.from(content, 'base64').toString()
+      summary = { objects: text === 'PKfake' ? [{ label: 'delivered', kind: 'circle', definition: '' }]
+        : JSON.parse(text.slice(2)), selectedLabels: [], objectsTruncated: false }
+    },
+    reset: async () => { summary = { objects: [], selectedLabels: [], objectsTruncated: false } },
+    setSpace: async () => {}, setViews: async () => {}, resize: async () => {}, dispose: () => {} }
+  return { ...harness(true, port), select: (labels: string[]) => { summary = { ...summary, selectedLabels: labels } },
+    addCircle: (label: string, caption: string) => { summary = { ...summary, objects: [...summary.objects,
+      { label, kind: 'circle', caption, definition: 'Circle(P,B)' }] } },
+    scene: (label: string, caption = '圆') => { summary = { objectsTruncated: false,
+      selectedLabels: [], objects: [{ label, kind: 'circle', caption, definition: 'Circle(O,A)' }] } } }
 }
 
 describe('plugin-core PWA integration', () => {
+  it('sends exact selected identities, records them locally and drops deselected context on the next turn', async () => {
+    const h = selectionHarness()
+    try {
+      await h.runtime.setProviderKey('fake')
+      const id = await h.runtime.createSession()
+      await h.runtime.openSession(id)
+      h.scene('c1', '我的圆'); h.addCircle('c2', '我的圆')
+      h.select(['c1', 'c2'])
+      await h.runtime.sendMessage(id, '把它们填充红色')
+      const post = h.requests.find(r => r.method === 'POST')!.body as { prompt: string; base: { name: string } }
+      expect(post.prompt).toContain('{"label":"c1","type":"circle","displayName":"我的圆"}')
+      expect(post.prompt).toContain('{"label":"c2","type":"circle","displayName":"我的圆"}')
+      expect(post.prompt).toContain('User request:\n把它们填充红色')
+      expect(post.base.name).toBe(`session-${id}.ggb`)
+      expect((await h.runtime.view(id)).messages[0]?.content).toBe('把它们填充红色')
+      expect((await h.runtime.view(id)).title).toBe('把它们填充红色')
+      h.select([])
+      await h.runtime.sendMessage(id, '继续')
+      expect((h.requests.filter(r => r.method === 'POST').at(-1)!.body as { prompt: string }).prompt).toBe('继续')
+    } finally { h.runtime.dispose() }
+  })
+
+  it('never borrows another Session selection or baseline and does not restore old selection', async () => {
+    const h = selectionHarness()
+    try {
+      await h.runtime.setProviderKey('fake')
+      const first = await h.runtime.createSession(), second = await h.runtime.createSession()
+      await h.runtime.openSession(first)
+      h.scene('c1'); h.select(['c1'])
+      await h.runtime.openSession(second)
+      h.scene('c2'); h.select(['c2'])
+      await h.runtime.sendMessage(first, '后台任务')
+      const posts = () => h.requests.filter(r => r.method === 'POST').map(r => r.body as { prompt: string; base: { dataBase64: string } })
+      expect(posts()[0]?.prompt).toBe('后台任务')
+      expect(Buffer.from(posts()[0]!.base.dataBase64, 'base64').toString()).toContain('c1')
+      expect(Buffer.from(posts()[0]!.base.dataBase64, 'base64').toString()).not.toContain('c2')
+      await h.runtime.sendMessage(second, '改成蓝色')
+      expect(posts()[1]?.prompt).toContain('"label":"c2"')
+      expect(posts()[1]?.prompt).not.toContain('c1')
+      await h.runtime.openSession(first)
+      await h.runtime.sendMessage(first, '继续修改')
+      expect(posts()[2]?.prompt).toBe('继续修改')
+    } finally { h.runtime.dispose() }
+  })
+
+  it('refuses a Session switch during export without posting a stale selection', async () => {
+    const h = selectionHarness()
+    try {
+      await h.runtime.setProviderKey('fake')
+      const first = await h.runtime.createSession(), second = await h.runtime.createSession()
+      await h.runtime.openSession(first)
+      h.scene('c1'); h.select(['c1'])
+      const original = h.applet.snapshot.bind(h.applet)
+      let release!: () => void, entered!: () => void
+      const pending = new Promise<void>(resolve => { release = resolve })
+      const reading = new Promise<void>(resolve => { entered = resolve })
+      vi.spyOn(h.applet, 'snapshot').mockImplementationOnce(async () => {
+        const captured = await original(); entered(); await pending; return captured
+      })
+      const outcome = h.runtime.sendMessage(first, 'red').catch(error => error as Error)
+      await reading
+      await h.runtime.openSession(second)
+      release()
+      expect(await outcome).toMatchObject({ message: 'canvas_context_changed' })
+      expect(h.requests.filter(r => r.method === 'POST')).toEqual([])
+      expect((await h.runtime.view(first)).messages).toEqual([])
+    } finally { h.runtime.dispose() }
+  })
+
+  it('rejects a selected object that was deleted before send', async () => {
+    const h = selectionHarness()
+    try {
+      await h.runtime.setProviderKey('fake')
+      const id = await h.runtime.createSession()
+      await h.runtime.openSession(id)
+      h.scene('c1'); h.select(['removed'])
+      await expect(h.runtime.sendMessage(id, 'red')).rejects.toThrow('selected_object_missing')
+      expect(h.requests.filter(r => r.method === 'POST')).toEqual([])
+    } finally { h.runtime.dispose() }
+  })
+
+  it.each([false, true])('isolates late background delivery and checks local bytes (corrupt=%s)', async corrupt => {
+    const h = selectionHarness()
+    let controller!: ReadableStreamDefaultController<Uint8Array>
+    const stream = new ReadableStream<Uint8Array>({ start(value) { controller = value } })
+    const originalFetch = h.fetchMock.getMockImplementation()!
+    h.fetchMock.mockImplementation(async (input, init) => String(input).includes('/events')
+      ? new Response(stream) : originalFetch(input, init))
+    try {
+      await h.runtime.setProviderKey('fake')
+      const first = await h.runtime.createSession(), second = await h.runtime.createSession()
+      await h.runtime.openSession(first)
+      h.scene('c1'); h.select(['c1'])
+      await h.runtime.sendMessage(first, 'red')
+      await h.runtime.openSession(second)
+      h.scene('c2'); h.select(['c2'])
+      const completed = view('completed')
+      controller.enqueue(new TextEncoder().encode(sseFrame('plugin_core.ready', {
+        schemaVersion: 1, type: 'plugin_core.ready', generation: 'g', run: completed, cursor: 2, terminal: true,
+      })))
+      controller.close()
+      await vi.waitFor(async () => expect((await h.runtime.view(first)).delivery).not.toBeNull())
+      expect((await h.applet.context()).selectedLabels).toEqual(['c2'])
+      expect((await h.applet.context()).objects[0]?.label).toBe('c2')
+      expect((await h.runtime.view(first)).canvas?.digestKind).toBe('ggb-bytes')
+      if (corrupt) {
+        const stored = (await h.runtime.view(first)).canvas!
+        await h.artifacts.put(stored.opfsPath, new TextEncoder().encode('PKcorrupt'))
+        await expect(h.runtime.sendMessage(first, 'background')).rejects.toThrow('local_canvas_digest_mismatch')
+        await h.runtime.openSession(first)
+        expect((await h.applet.context()).objects).toEqual([])
+        expect((await h.applet.context()).selectedLabels).toEqual([])
+        return
+      }
+      await h.runtime.openSession(first)
+      expect((await h.applet.context()).objects[0]?.label).toBe('delivered')
+      expect((await h.applet.context()).selectedLabels).toEqual([])
+      expect((await h.runtime.view(first)).canvas?.digestKind).toBeUndefined()
+    } finally { h.runtime.dispose() }
+  })
+
+  it('bounds the combined selection and user prompt before creating a run', async () => {
+    const h = selectionHarness()
+    try {
+      await h.runtime.setProviderKey('fake')
+      const id = await h.runtime.createSession()
+      await h.runtime.openSession(id)
+      h.scene('c'); h.select(['c'])
+      await expect(h.runtime.sendMessage(id, 'x'.repeat(11_999))).rejects.toThrow('plugin_core_prompt_invalid')
+      expect(h.requests.filter(r => r.method === 'POST')).toEqual([])
+      expect((await h.runtime.view(id)).messages).toEqual([])
+    } finally { h.runtime.dispose() }
+  })
+
   it('reconnects an interrupted stream from the durable tool cursor and receives terminal delivery once', async () => {
     const { runtime, fetchMock, db } = harness(true)
     let streams = 0

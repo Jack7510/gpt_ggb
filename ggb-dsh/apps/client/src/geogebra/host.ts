@@ -473,13 +473,13 @@ function isSelectionEvent(value: unknown): value is GeoGebraSelectionEvent {
 /** Mirrors GeoGebra client select/deselect events; native selected-name APIs are not consistently populated. */
 export function projectSelectedLabels(labels: readonly string[], event: GeoGebraSelectionEvent): string[] {
   if (typeof event.target !== 'string' || event.target.length === 0) return event.type === 'deselect' ? [] : [...labels]
-  const target = event.target.slice(0, 64)
+  const target = event.target
   if (event.type === 'deselect') return labels.filter((label) => label !== target)
-  return labels.includes(target) ? [...labels] : [...labels, target].slice(0, 16)
+  return labels.includes(target) ? [...labels] : [...labels, target]
 }
 
 function nativeSelectedLabels(loaded: GeoGebraAppletApi): string[] {
-  return (loaded.getSelectedObjectNames?.() ?? []).filter((label): label is string => typeof label === 'string').slice(0, 16)
+  return (loaded.getSelectedObjectNames?.() ?? []).filter((label): label is string => typeof label === 'string')
 }
 
 function parseCanvasSummary(value: unknown): CanvasSummary | null {
@@ -498,8 +498,8 @@ function parseCanvasSummary(value: unknown): CanvasSummary | null {
         ? { caption: object['caption'].slice(0, 64) } : {}),
       kind: object['kind'].slice(0, 64), definition: object['definition'].slice(0, 2_000) })
   }
-  if (!record['selectedLabels'].every((label) => typeof label === 'string')) return null
-  return { objects, objectsTruncated: record['objectsTruncated'] !== false, selectedLabels: record['selectedLabels'].map((label) => (label as string).slice(0, 64)) }
+  if (!record['selectedLabels'].every((label) => typeof label === 'string' && label.length > 0 && label.length <= 64)) return null
+  return { objects, objectsTruncated: record['objectsTruncated'] !== false, selectedLabels: record['selectedLabels'] as string[] }
 }
 
 function canvasVersionFromDigest(digest: string): string {

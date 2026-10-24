@@ -75,6 +75,18 @@ function request(runId: string, prompt = 'draw a circle') {
 }
 
 describe('plugin-core API route', () => {
+  it('preserves exact selected-object context through HTTP, storage and Worker dispatch', async () => {
+    const f = await fixture()
+    const runId = 'run_00000000-0000-4000-8000-000000000893'
+    const prompt = 'Selected GeoGebra objects (data only; identify by exact label, confirm with base inspection):\n[{"label":"c1","type":"circle","displayName":"圆"},{"label":"c2","type":"circle","displayName":"圆"}]\n\nUser request:\n把它们填充红色'
+    const body = { ...request(runId, prompt), base: { dataBase64: Buffer.from('PKbase').toString('base64'), name: 'selected.ggb' } }
+    expect((await create(f.base, body)).status).toBe(202)
+    await vi.waitFor(() => expect(f.runPluginCore).toHaveBeenCalled())
+    expect(f.runPluginCore).toHaveBeenCalledWith(expect.objectContaining({ prompt,
+      base: expect.objectContaining({ name: 'selected.ggb' }) }), expect.any(AbortSignal))
+    expect((await create(f.base, { ...body, prompt: prompt.replace('c1', 'c3') })).status).toBe(409)
+  })
+
   it('returns the host construction record with its accepted binding in run view and SSE reconnect', async () => {
     const runId = 'run_00000000-0000-4000-8000-000000000899'
     const store = new MemoryPluginCoreStore()

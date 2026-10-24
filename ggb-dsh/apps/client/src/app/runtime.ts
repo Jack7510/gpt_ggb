@@ -1,3 +1,4 @@
+import { captureSelectedInput } from './selected-objects.js'
 import { reconnectPluginStream } from '../runtime/reconnect-plugin-stream.js'
 import { imageProblemFromReport, titleFromFinalReport, titleFromPrompt } from '../sessions/session-title.js'
 import { failureMessage } from './failure-message.js'
@@ -16,7 +17,7 @@ import {
   canvasArtifactPath, deliveryArtifactPath, type ArtifactStore,
 } from '../persistence/opfs-artifacts.js'
 import type { ClientDatabase } from '../persistence/indexeddb.js'
-import { decodeBase64, encodeBase64 } from '../geogebra/snapshot.js'
+import { decodeBase64, encodeBase64, digestBytes } from '../geogebra/snapshot.js'
 import {
   SessionRepository, type LocalCanvasBinding, type LocalPluginDelivery,
   type LocalRunBinding,
@@ -95,6 +96,7 @@ export class ClientRuntime {
   private readonly selectionListeners = new Set<(change: CanvasSelectionChange) => void>()
   private readonly disposeAppletSelection: (() => void) | null
   private currentSessionId: string | null = null
+  private canvasRevision = 0
   /** Serializes the single real applet so an earlier slow restore cannot win a later selection. */
   private canvasSwitch: Promise<void> = Promise.resolve()
 
@@ -163,6 +165,7 @@ export class ClientRuntime {
   }
 
   public openSession(sessionId: string): Promise<SessionView> {
+    this.canvasRevision += 1
     const opened = this.canvasSwitch.then(async () => this.openSessionSerial(sessionId))
     this.canvasSwitch = opened.then(() => undefined, () => undefined)
     return opened
@@ -254,7 +257,10 @@ export class ClientRuntime {
 
   /** Clears only the active browser canvas; it never creates a Server mutation. */
   public async resetCanvas(sessionId: string): Promise<void> {
+    this.canvasRevision += 1
     if (this.options.applet === null) throw new Error('geogebra_not_ready')
+    await this.canvasSwitch
+    if (this.currentSessionId !== null && this.currentSessionId !== sessionId) throw new Error('session_canvas_not_active')
     await this.options.applet.reset()
     await this.sessions.deleteCanvasBinding(sessionId)
     await this.refreshAppletSelection(sessionId)
@@ -271,6 +277,7 @@ export class ClientRuntime {
 
   /** Import a user GGB as this Session's canvas and next plugin-core base. */
   public async importGgb(sessionId: string, bytes: Uint8Array): Promise<void> {
+    this.canvasRevision += 1
     if (bytes.length === 0 || bytes.length > 8 * 1024 * 1024
       || bytes[0] !== 0x50 || bytes[1] !== 0x4b) {
       this.notify({ sessionId, kind: 'error', detail: 'ggb_import_invalid' })
@@ -278,6 +285,7 @@ export class ClientRuntime {
     }
     if (this.options.applet === null) throw new Error('applet_unavailable')
     await this.canvasSwitch
+    if (this.currentSessionId !== null && this.currentSessionId !== sessionId) throw new Error('session_canvas_not_active')
     await this.options.applet.ready()
     await this.options.applet.restore(encodeBase64(bytes))
     const snapshot = await this.options.applet.snapshot()
@@ -326,6 +334,7 @@ export class ClientRuntime {
 
   /** Sends one user turn to the plugin-core engine. */
   public async sendMessage(sessionId: string, prompt: string, image?: PluginCoreImage): Promise<string> {
+    const intendedRevision = this.currentSessionId === sessionId ? this.canvasRevision : undefined
     const session = await this.repository.getSession(sessionId)
     if (session === null) throw new Error('session_not_found')
     if (prompt.trim().length === 0 || prompt.length > 12_000) {
@@ -340,7 +349,8 @@ export class ClientRuntime {
         detail: 'provider_key_required' })
       throw new Error('provider_key_required')
     }
-    const base = await this.pluginBase(sessionId)
+    const input = await this.pluginInput(sessionId, prompt, intendedRevision)
+    if (input.prompt.length > 12_000) throw new Error('plugin_core_prompt_invalid')
     const capability = createRunCapability(this.options.random)
     const sealed = await this.vault.seal(capability.runToken)
     const userMessage = await this.sessions.appendMessage({
@@ -369,7 +379,7 @@ export class ClientRuntime {
     this.coordinator.publish('messages_changed', sessionId)
     try {
       await this.pluginAdapter.createRun({
-        runId: capability.runId, prompt, base,
+        runId: capability.runId, ...input,
         ...(attachment === undefined ? {} : { image: attachment }),
       }, capability.runToken, providerKey)
       await this.sessions.updateMessage(userMessage.messageId, { deliveryState: 'complete' })
@@ -383,19 +393,34 @@ export class ClientRuntime {
     return capability.runId
   }
 
-  /** The current applet GGB, or null for an empty canvas. */
-  private async pluginBase(sessionId: string): Promise<{ dataBase64: string; name: string } | null> {
-    const applet = this.options.applet
-    if (applet === null) return null
-    await applet.ready()
-    const summary = await applet.context()
-    if (summary.objects.length === 0) return null
-    const snapshot = await applet.snapshot()
-    return {
-      dataBase64: snapshot.contentBase64,
-      name: `session-${sessionId}.ggb`,
+  /** A background Session never borrows the visible canvas or its selection. */
+  private async pluginInput(sessionId: string, prompt: string, intendedRevision?: number): Promise<{
+    prompt: string; base: { dataBase64: string; name: string } | null
+  }> {
+    await this.canvasSwitch
+    if (intendedRevision !== undefined && intendedRevision !== this.canvasRevision) throw new Error('canvas_context_changed')
+    const owner = this.currentSessionId
+    if (owner !== null && owner !== sessionId) {
+      const binding = await this.sessions.getActiveCanvas(sessionId)
+      if (binding === null) return { prompt, base: null }
+      const bytes = await this.options.artifacts.get(binding.opfsPath)
+      if (bytes === null) throw new Error('local_canvas_snapshot_missing')
+      if (binding.digestKind === 'ggb-bytes' && await digestBytes(bytes, this.options.subtle) !== binding.contentDigest) {
+        throw new Error('local_canvas_digest_mismatch')
+      }
+      return { prompt, base: { dataBase64: encodeBase64(bytes), name: `session-${sessionId}.ggb` } }
     }
+    const applet = this.options.applet
+    if (applet === null) return { prompt, base: null }
+    const revision = this.canvasRevision
+    const input = await captureSelectedInput(applet, prompt, hasSelection => {
+      if (revision !== this.canvasRevision || owner !== this.currentSessionId) throw new Error('canvas_context_changed')
+      if (hasSelection && owner !== sessionId) throw new Error('selection_session_not_active')
+    })
+    return { prompt: input.prompt, base: input.contentBase64 === null ? null
+      : { dataBase64: input.contentBase64, name: `session-${sessionId}.ggb` } }
   }
+
 
   private async connectPluginBinding(binding: LocalRunBinding): Promise<void> {
     const token = await this.vault.reveal(binding.runTokenCiphertext)
@@ -506,13 +531,7 @@ export class ClientRuntime {
     // The canvas snapshot is re-serialized by GeoGebra; keep the delivered
     // bytes separately so download matches the reported size and SHA-256.
     await this.options.artifacts.put(ggbOpfsPath, bytes)
-    let snapshot: { canvasVersion: string; contentBase64: string; contentDigest: string } | null = null
-    if (this.options.applet !== null) {
-      await this.options.applet.ready()
-      await this.options.applet.restore(encodeBase64(bytes))
-      snapshot = await this.options.applet.snapshot()
-      await this.persistSnapshot(binding.sessionId, snapshot)
-    }
+    await this.applyDeliveredCanvas(binding.sessionId, bytes)
     const delivery: LocalPluginDelivery = {
       runId: binding.runId,
       sha256: metadata.sha256,
@@ -632,10 +651,30 @@ export class ClientRuntime {
     await this.persistSnapshot(sessionId, snapshot)
   }
 
+  /** Serialize delivery restores with Session switches; background work stays offscreen. */
+  private async applyDeliveredCanvas(sessionId: string, bytes: Uint8Array): Promise<void> {
+    const operation = this.canvasSwitch.then(async () => {
+      const applet = this.options.applet
+      if (applet === null || this.currentSessionId !== null && this.currentSessionId !== sessionId) {
+        const digest = await digestBytes(bytes, this.options.subtle)
+        await this.persistSnapshot(sessionId, { contentBase64: encodeBase64(bytes),
+          canvasVersion: `delivery_${digest.slice(0, 32)}`, contentDigest: digest }, 'ggb-bytes')
+        return
+      }
+      this.canvasRevision += 1
+      await applet.ready()
+      await applet.restore(encodeBase64(bytes))
+      await this.persistSnapshot(sessionId, await applet.snapshot())
+    })
+    this.canvasSwitch = operation.then(() => undefined, () => undefined)
+    await operation
+  }
+
   /** Bind an already-observed applet snapshot to its local Session immediately. */
   private async persistSnapshot(
     sessionId: string,
     snapshot: { canvasVersion: string; contentBase64: string; contentDigest: string },
+    digestKind?: LocalCanvasBinding['digestKind'],
   ): Promise<void> {
     const opfsPath = canvasArtifactPath(sessionId, snapshot.canvasVersion)
     await this.options.artifacts.put(opfsPath, decodeBase64(snapshot.contentBase64))
@@ -644,6 +683,7 @@ export class ClientRuntime {
       canvasVersion: snapshot.canvasVersion,
       opfsPath,
       contentDigest: snapshot.contentDigest,
+      ...(digestKind === undefined ? {} : { digestKind }),
       updatedAt: this.options.now(),
     })
   }
@@ -664,8 +704,15 @@ export class ClientRuntime {
       return
     }
     try {
+      if (binding.digestKind === 'ggb-bytes' && await digestBytes(bytes, this.options.subtle) !== binding.contentDigest) {
+        throw new Error('local_canvas_digest_mismatch')
+      }
       await applet.restore(encodeBase64(bytes))
       const restored = await applet.snapshot()
+      if (binding.digestKind === 'ggb-bytes') {
+        await this.persistSnapshot(sessionId, restored)
+        return
+      }
       if (restored.contentDigest !== binding.contentDigest) throw new Error('local_canvas_digest_mismatch')
     } catch {
       await applet.reset()

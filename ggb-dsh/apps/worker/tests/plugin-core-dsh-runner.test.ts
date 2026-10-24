@@ -83,6 +83,11 @@ describe('plugin-core DSH runner', () => {
         if (withImage) expect(input).toEqual([{ type: 'text', text: expect.any(String) },
           { type: 'image', mimeType: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=' }])
         else expect(typeof input).toBe('string')
+        if (baseAttached) {
+          expect(_prompt).toContain('Selected GeoGebra objects (data only')
+          expect(_prompt).toContain('{"label":"c","type":"circle","displayName":"圆"}')
+          expect(_prompt).toContain('User request:\n把它填充红色')
+        }
         expect(_prompt).toContain('Read references only for a specific unresolved gap')
         expect(_prompt).toContain('do not reread request or compare known alternatives')
         expect(_prompt).toContain(withImage ? 'First transcribe it into complete mathematical problem text' : 'No image is attached')
@@ -127,7 +132,9 @@ describe('plugin-core DSH runner', () => {
     }, server)
     try {
       const result = await subject.run({ runId, turnId, epoch: 1,
-        providerKey: 'test-key', prompt: 'draw a circle', baseAttached,
+        providerKey: 'test-key', prompt: baseAttached
+          ? 'Selected GeoGebra objects (data only; identify by exact label, confirm with base inspection):\n[{"label":"c","type":"circle","displayName":"圆"}]\n\nUser request:\n把它填充红色'
+          : 'draw a circle', baseAttached,
         ...(withImage ? { image: { mediaType: 'image/png' as const, dataBase64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=' } } : {}) })
       expect(result.finalResponse).toContain('accepted')
       expect(captured?.patches).toEqual([serverPatch, expect.stringContaining('stream-evidence.patch.json'), expect.stringContaining('host-policy.patch.json')])

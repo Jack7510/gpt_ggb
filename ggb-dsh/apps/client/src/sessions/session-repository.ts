@@ -70,6 +70,8 @@ export interface LocalRunBinding {
 }
 
 export interface LocalCanvasBinding {
+  /** Background deliveries retain exact GGB bytes until first applet load. */
+  digestKind?: 'ggb-bytes'
   sessionId: string
   canvasVersion: string
   opfsPath: string
