@@ -224,8 +224,24 @@ describe('plugin-core service', () => {
     expect(result.usage).toEqual({ calls: 1, inputTokens: 12, outputTokens: 5,
       reasoningTokens: null, cacheReadTokens: 2, complete: true })
     expect(result.diagnostics).toMatchObject({ eventTypes: { 'tool/start': 1, 'tool/end': 1 },
-      toolCalls: 2 })
+      toolCalls: 1 })
     expect(result.error?.code).toBe('plugin_core_no_delivery')
+  })
+
+  it('counts a tool call once when its result is also recorded', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'plugin-core-service-'))
+    dirs.push(root)
+    const dsh = { run: async () => ({ finalResponse: 'done', events: [
+      { type: 'tool/call', data: {} },
+      { type: 'tool/result', data: {} },
+      { type: 'turn/end', data: { reason: { kind: 'completed' } } },
+    ] }) } as unknown as PluginCoreDshRunner
+    const service = new PluginCoreService(dsh, { outputRoot: root })
+    const result = await service.run({ runId, deliveryContract: 'receipt-v1', providerKey: 'key', prompt: 'draw' })
+    expect(result.diagnostics).toMatchObject({
+      eventTypes: { 'tool/call': 1, 'tool/result': 1 },
+      toolCalls: 1,
+    })
   })
 
   it('cancels an in-flight turn through the Worker signal', async () => {

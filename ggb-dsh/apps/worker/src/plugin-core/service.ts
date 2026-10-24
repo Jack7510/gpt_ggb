@@ -461,8 +461,7 @@ function diagnosticsOf(result: RunResult): PluginCoreDiagnostics {
   const eventTypes: Record<string, number> = {}
   const events = Array.isArray(result.events) ? result.events : []
   for (const event of events) eventTypes[event.type] = (eventTypes[event.type] ?? 0) + 1
-  const toolCalls = Object.entries(eventTypes)
-    .filter(([type]) => /^tool\//u.test(type))
-    .reduce((sum, [, count]) => sum + count, 0)
+  // call/result and start/end both describe one invocation; count the start.
+  const toolCalls = eventTypes['tool/call'] || eventTypes['tool/start'] || 0
   return { eventTypes, toolCalls }
 }
