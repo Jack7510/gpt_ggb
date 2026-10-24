@@ -36,9 +36,5 @@ output/
 .pytest_cache/
 .worktrees/
 dist/
-# Local sibling plugin checkout; the release distribution is vendored under ggb-dsh/vendor/.
-ggb-plugins/
 
-# Also match a local symlink to the sibling checkout.
-/ggb-plugins
 .archify/
