@@ -17,13 +17,13 @@
 
 | ID | 优先级 | 状态 | 工作项 | 根因/说明 | 退出条件 |
 | --- | --- | --- | --- | --- | --- |
-| PC-01 | P1 | 待验证 | 目标机器 Docker/PWA 部署验证 | 原切换批次的本机真实 Provider 验证已完成，当前安装包已完成本机真实 GeoGebra 构建、取消及一次真实 Provider 正多边形交付验收；目标机镜像构建、静态资源、systemd/Edge 与 017/018 应用尚未在目标环境验证 | 目标机构建镜像、应用 017/018、启动 API/Worker、PWA 完成一轮已授权构图并下载/续做成功 |
+| PC-01 | P1 | 待验证 | 目标机器 DSH 插件/systemd/PWA 部署验证 | 原切换批次的本机真实 Provider 验证已完成，当前安装包已完成本机真实 GeoGebra 构建、取消及一次真实 Provider 正多边形交付验收；目标机插件安装、静态资源、systemd/Edge 与 017/018 应用尚未在目标环境验证 | 目标机核验 DSH 插件安装、应用 017/018、启动 API/Worker、PWA 完成一轮已授权构图并下载/续做成功 |
 | PC-02 | P2 | 观察 | `general-horse-explanation` 未交付 | 本机集成批次模型侧 `plugin_core_no_delivery`；最终重试仍未交付 | 该案例在授权真实 Provider 运行中交付，且交付 GGB 通过插件核验与 Client 加载 |
 | PC-03 | P2 | 观察 | `ellipse-foci` 未交付 | 同上 | 同上 |
 | PC-04 | P1 | 阻塞 | 目标环境 PostgreSQL 备份与 017/018 演练 | 需要目标数据库、备份窗口与明确授权 | 备份完成、018 已在目标库记录、API/Worker 启动通过 schema admission |
 | PC-05 | P3 | 待开始 | 目标环境真实 Provider 批量复跑 | 本机仅完成 5/7；目标环境尚未复跑 | 明确授权后，在目标环境以新 `output/` 目录完成批次并保留证据 |
 | PC-06 | P1 | 待验证 | 首次 MALFORMED_RESPONSE 的历史归因 | 已补齐双侧流证据并通过一次真实 PWA 画圆；本次参数合法且 SDK 组装一致。首次失败没有原始流，无法最终归因，不能宣称修复了已证实的 SDK 组装错误 | 发生下一次已授权运行时用新证据定位；只允许无 build 的安全重试，不修补非法 JSON |
-| IP-C | P0 | 待验证 | 部署层 Worker 崩溃后的资源回收 | 本机真实 GeoGebra 交付和主动取消已验收；容器/cgroup/systemd 崩溃回收尚未验收 | 在授权目标环境终止 Worker，证明部署层回收其浏览器子树且不自动重放 |
+| IP-C | P0 | 待验证 | 部署层 Worker 崩溃后的资源回收 | 本机真实 GeoGebra 交付和主动取消已验收；systemd/cgroup 崩溃回收尚未验收 | 在授权目标环境终止 Worker，证明部署层回收其浏览器子树且不自动重放 |
 | IP-E | P1 | 待验证 | 安装插件真实 Provider 与部署验收 | 本机完整供应、doctor、真实构图/取消及 mock Harness 的 PWA 全链已通过；一次真实 PWA 画圆已通过；两轮正多边形失败已定位到 Provider 非法 JSON，当前包一次真实正多边形交付通过；生产环境未验收 | 分别授权后完成复杂题回归、目标环境发布与部署层回收验收 |
 
 ## 2. 已完成（不再作为当前工作）
@@ -296,7 +296,7 @@
   `verification-final/cancel-processes.json`、`regression-tests.log`、`typecheck.log`、`lint.log`、`quality.log`。
   首次测试因夹具缺少必要 requirement 被结构拒绝，旧证据未用于本次成功认定；成功验收使用新的输出目录。
   Provider 请求为 0（仅 mock Harness），未运行真实模型，也未验收真实 DSH 模型任务、PWA HTTP/UI 全链（已由上述后续验收补齐）、
-  复杂题覆盖、Worker 崩溃部署回收、生产镜像或目标数据库；这些范围仍由 IP-C/IP-E 与部署条目维护。
+  复杂题覆盖、Worker 崩溃部署回收、生产插件安装或目标数据库；这些范围仍由 IP-C/IP-E 与部署条目维护。
 
 
 - 安装式插件批次 D：开发默认装配改为已安装插件，SDK 0.2.1-rc.2、Cordis 4.0.5、group 1.0.5、
@@ -319,7 +319,7 @@
   完整供应须使用新目标目录，成功后切换 GGB_PLUGIN_ROOT。临时 PostgreSQL 已停止并删除；没有修改目标数据库。
   证据在 `output/installed-plugin-d/`：`final-tests.log`、`plugin-tests.log`、`typecheck.log`、
   `worker-final-types.log`、`client-types.log`、`quality.log`、`lint.log`、`provision.log`、`sdk/result.json`。
-  Docker/systemd 资产已同步，但未构建镜像、未部署生产、未运行真实 Provider、GeoGebra 或浏览器回归。
+  DSH 插件/systemd 资产已同步，但未部署生产、未运行真实 Provider、GeoGebra 或浏览器回归。
 
 
 - 安装式插件批次 C 的离线实施：公开 executor 产生关联回执；宿主按 buildId 隔离输出、清空旧候选，
@@ -338,7 +338,7 @@
   本轮证据：`output/installed-plugin-c/final-tests.log`、`service-final-tests.log`、`worker-final-types.log`、
   `typecheck.log`、`client-types.log`、`plugin-tests.log`、`final-sdk/result.json`（均相对本轮 output 目录）。
   回执成功用合成事实与字节，执行器的真实入口另测结构拒绝；真实 GeoGebra、真实浏览器子树、Worker
-  崩溃后的部署回收、镜像发布与目标环境仍未验收。接口与复现见
+  崩溃后的部署回收、插件发布与目标环境仍未验收。接口与复现见
   [可信交付与取消结算](../ggb-dsh/docs/dsh-sdk-compatibility.md#可信交付与取消结算)。
 
 - 安装式插件批次 B：SDK 失败前事件和白名单异常在关闭前持久化；逐调用参数、issues、原始结果、

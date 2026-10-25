@@ -58,6 +58,7 @@ export function composeApi(env: NodeJS.ProcessEnv = process.env): ApiComposition
     pluginCore: pluginCoreService,
     legacyNativeRuns,
     agentEngine: config.agentEngine,
+    checkWorkerReady: () => workerChannel.probe(),
   })
   // Validated before listening: an incomplete or mismatched GeoGebra runtime fails boot
   // instead of serving a partial applet (§10 static service, §11 fixed runtime).

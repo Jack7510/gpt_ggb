@@ -42,6 +42,7 @@ interface Waiter {
  */
 export class WorkerDispatchClient implements PluginCoreWorkerChannel {
   private socket: Socket | null = null
+  private connectingSocket: Socket | null = null
   private connecting: Promise<Socket> | null = null
   private buffer = ''
   private bufferedBytes = 0
@@ -54,6 +55,23 @@ export class WorkerDispatchClient implements PluginCoreWorkerChannel {
     private readonly secret: string,
     private readonly ackTimeoutMs: number,
   ) {}
+
+  /** Fresh authenticated connection; no run, Provider request or browser launch. */
+  async probe(): Promise<void> {
+    const timeoutMs = Math.min(this.ackTimeoutMs, 3000)
+    const isolated = new WorkerDispatchClient(this.socketPath, this.secret, timeoutMs)
+    this.runs.add(isolated)
+    let timer: NodeJS.Timeout | undefined
+    try {
+      await Promise.race([isolated.ensureHandshake(), new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error('worker readiness timed out')), timeoutMs)
+      })])
+    } finally {
+      clearTimeout(timer)
+      this.runs.delete(isolated)
+      isolated.close()
+    }
+  }
 
   /** One independent plugin-core run; the Worker returns the bounded delivery facts. */
   async runPluginCore(request: { deliveryContract?: 'legacy' | 'receipt-v1'; runId: RunId; providerKey: string; prompt: string;
@@ -131,12 +149,15 @@ export class WorkerDispatchClient implements PluginCoreWorkerChannel {
 
   private closeSocket(): void {
     const socket = this.socket
+    const connectingSocket = this.connectingSocket
     this.socket = null
+    this.connectingSocket = null
     this.connecting = null
     this.buffer = ''
     this.bufferedBytes = 0
     this.decoder = new StringDecoder('utf8')
     if (socket !== null) socket.destroy()
+    if (connectingSocket !== null) connectingSocket.destroy()
     for (const waiter of this.waiters.values()) {
       clearTimeout(waiter.timer)
       waiter.reject(new Error('worker channel closed'))
@@ -149,23 +170,29 @@ export class WorkerDispatchClient implements PluginCoreWorkerChannel {
     if (this.connecting !== null) return this.connecting
     this.connecting = (async () => {
       const socket = await this.connectSocket()
-      const response = await this.request(
-        socket,
-        signChannelMessage(this.secret, {
-          protocolVersion: INTERNAL_CHANNEL_PROTOCOL_VERSION,
-          type: 'handshake' as const,
-          requestId: randomUUID(),
-          issuedAt: new Date().toISOString(),
-          nonce: randomBytes(24).toString('hex'),
-        }),
-      )
-      if (!channelHandshakeResponseSchema.safeParse(response).success) {
+      try {
+        const response = await this.request(
+          socket,
+          signChannelMessage(this.secret, {
+            protocolVersion: INTERNAL_CHANNEL_PROTOCOL_VERSION,
+            type: 'handshake' as const,
+            requestId: randomUUID(),
+            issuedAt: new Date().toISOString(),
+            nonce: randomBytes(24).toString('hex'),
+          }),
+        )
+        if (!channelHandshakeResponseSchema.safeParse(response).success) {
+          socket.destroy()
+          throw new Error(`worker handshake rejected: ${JSON.stringify(response)}`)
+        }
+        this.socket = socket
+        this.connectingSocket = null
+        this.connecting = null
+        return socket
+      } catch (error) {
         socket.destroy()
-        throw new Error(`worker handshake rejected: ${JSON.stringify(response)}`)
+        throw error
       }
-      this.socket = socket
-      this.connecting = null
-      return socket
     })()
     this.connecting.catch(() => {
       if (this.connecting !== null) this.connecting = null
@@ -176,6 +203,7 @@ export class WorkerDispatchClient implements PluginCoreWorkerChannel {
   private connectSocket(): Promise<Socket> {
     return new Promise((resolve, reject) => {
       const socket = connect(this.socketPath)
+      this.connectingSocket = socket
       const onEarlyError = (error: Error): void => {
         socket.destroy()
         reject(error)
@@ -185,7 +213,7 @@ export class WorkerDispatchClient implements PluginCoreWorkerChannel {
         socket.off('error', onEarlyError)
         socket.on('error', () => this.closeSocket())
         socket.on('close', () => {
-          if (this.socket === socket) this.closeSocket()
+          if (this.socket === socket || this.connectingSocket === socket) this.closeSocket()
         })
         socket.on('data', (chunk: Buffer) => this.onData(chunk))
         resolve(socket)

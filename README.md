@@ -124,6 +124,9 @@ node tools/check-workspace.mjs ggb-dsh test apps/client/tests/plugin-core-runtim
 # 按模块检查：可选 check:client、check:api、check:worker
 node tools/check-workspace.mjs ggb-dsh check:worker
 
+# 部署资产离线检查：不启动 Provider、GeoGebra 或目标服务
+node tools/check-workspace.mjs ggb-dsh check:deploy
+
 # 全量：构建、全部测试与质量检查
 node tools/check-workspace.mjs ggb-dsh check
 ```

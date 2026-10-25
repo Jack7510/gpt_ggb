@@ -260,7 +260,7 @@ flowchart TB
   Executor -->|回执 envelope 3 与产物| Worker
 ```
 
-图中的 API 与 Worker 是两个 Node.js 进程，默认部署在同一镜像中，通过 0600 Unix socket 通信。
+图中的 API 与 Worker 是两个 Node.js 进程，由同一主机上的 systemd 管理，通过 0600 Unix socket 通信。
 Worker 为每个 turn 启动独立的 DSH SDK Server 和 DSH home。DSH 加载安装包的 server patch；
 插件 server adapter 只注册领域工具和 Worker Skill，通过签名请求调用宿主网关，不直接访问 Store 或 API。
 executor 是 Worker 启动的独立子进程，使用环境白名单、独立输出目录和进程组清理，不继承 Provider Key。
@@ -300,13 +300,13 @@ run 终态、artifact 和事件由 API 原子提交。
 
 部署与进程边界：
 
-- API 与 Worker 默认同镜像、双入口；插件安装根按只读使用，运行输出写入独立的
+- API 与 Worker 作为两个 Node 服务运行，由 systemd 管理；插件安装根按只读使用，运行输出写入独立的
   `GGB_PLUGIN_CORE_OUTPUT_ROOT`。
 - 本地开发默认 SQLite，生产使用 PostgreSQL；启动时通过 schema admission 确认迁移 018 已记录
   （017 是其前置）。
 - PWA 静态资源和 GeoGebra runtime 单独供应；Client 与插件分别供应、分别核对版本身份。
 - 每 turn 的 DSH home 独立；每次 build 使用独立输出目录；清理失败时隔离执行槽位。
-- 容器、systemd、PostgreSQL 迁移和崩溃回收按[部署指南](deploy-dsh.md)执行，本机验证不能替代。
+- DSH 插件安装、systemd、PostgreSQL 迁移和崩溃回收按[部署指南](deploy-dsh.md)执行，本机验证不能替代。
 
 架构不变量：
 
@@ -319,17 +319,17 @@ run 终态、artifact 和事件由 API 原子提交。
 
 ### 部署视图：组件实际放在哪里
 
-下图按仓库默认容器配置绘制，说明部署边界；不是在线环境巡检图。
-读图顺序：① 应用主机 → ② 同一应用容器 → ③ Worker 管理的按需子进程。
+下图按当前 Node + systemd + DSH 插件安装方式绘制，说明部署边界；不是在线环境巡检图。
+读图顺序：① 应用主机 → ② systemd 管理的 Node 服务 → ③ Worker 管理的按需子进程。
 浏览器、模型服务与数据库单列展示；数据库实际位置由连接配置确定。
-目标机器镜像、数据库迁移与生产 PWA 验收仍以 [Backlog](ggb-dsh-backlog.md)为准。
+目标机器插件安装、数据库迁移与生产 PWA 验收仍以 [Backlog](ggb-dsh-backlog.md)为准。
 
 ```mermaid
 flowchart LR
   User[用户设备：浏览器 PWA]
   subgraph Host[应用主机]
     Edge[Nginx：HTTPS 443 / SSE]
-    subgraph Container[同一应用容器]
+    subgraph Services[systemd 管理的 Node 服务]
       Api[API 常驻进程]
       Worker[Worker 常驻进程 / 工具网关]
       Dsh[每 turn：DSH SDK Server / 插件入口]
@@ -353,12 +353,12 @@ flowchart LR
 | --- | --- | --- |
 | 用户浏览器 | PWA、Session、画布与加密 BYOK vault | 浏览器不运行模型循环 |
 | 应用主机的入口 | Nginx；公网 HTTPS 443，转发到本机 8080 | SSE 关闭缓冲；API 不直接暴露公网 |
-| 应用容器 | API、Worker；按 turn 启动 DSH，按操作启动插件执行器 | API 与 Worker 用 Unix socket 通信；工具调用回到 Worker 网关 |
-| 固定安装目录 | `/opt/ggb-plugin` 的插件、Chromium 与 GeoGebra runtime | 只读供应，版本与摘要固定 |
-| 运行目录 | `/run/ggb`、`/dsh-home`、挂载的 plugin-core 输出目录 | socket、隔离 home 与构建文件可写；secret 文件只读挂载 |
+| Node 服务 | API、Worker；按 turn 启动 DSH，按操作启动插件执行器 | API 与 Worker 用 Unix socket 通信；工具调用回到 Worker 网关 |
+| 固定安装目录 | 工作区 `.plugin-core-runtime/<archiveSha256>` 的插件、Chromium 与 GeoGebra runtime | 只读供应，版本与摘要固定 |
+| 运行目录 | `/run/ggb-dsh/` 的 socket、DSH home；`/var/lib/ggb-dsh/` 的持久执行状态 | 临时文件与持久状态分开；secret 文件以 0600 权限独立提供 |
 | 私有数据库与外部模型 | PostgreSQL 保存服务端事实；DSH 通过 HTTPS 调用 Provider | 数据库位置由连接配置指定；模型服务不执行本机工具 |
 
-无 Docker 时，仓库的 systemd 方案在同一主机启动 API 与 Worker 两个服务，保留以上子进程关系与 PostgreSQL。
+systemd 从仓库位置推导工作区，在同一主机启动 API 与 Worker 两个服务；Worker 从安装描述加载 DSH 插件。
 使用 cpolar 时由 cpolar 终止公网 TLS，转发到本机 Nginx HTTP 80；采用对应配置，不重复终止 TLS。
 部署操作与验收步骤引用 [部署指南](deploy-dsh.md)，此处不新增环境配置。
 

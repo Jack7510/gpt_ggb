@@ -340,7 +340,7 @@ stateDiagram-v2
 | 插件公开入口 / Worker 安装准入 | 共享四工具定义和 Worker 契约；拆开 DSH 与插件执行兼容性 |
 | application / 内部通道 / API | 用量来源、运行时身份、错误投影和严格 schema 的协同演进 |
 | Client 相关消费者 | 验证用量来源、快照、重连、本地保存和导出；无契约变化的界面沿用 |
-| 供应、doctor、Docker、systemd | 固定 Codex 二进制、协议、模型元数据和进程资源清理 |
+| 供应、doctor、systemd | 固定 Codex 二进制、协议、模型元数据和进程资源清理 |
 
 业务 `engine` 继续是 `plugin_core`。Agent runtime 使用独立字段表示，
 不能把 Codex 误建模为另一种几何引擎。

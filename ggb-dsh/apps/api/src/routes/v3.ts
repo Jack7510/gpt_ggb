@@ -27,6 +27,7 @@ export interface RouteDeps {
   /** Reject-only probe for retired Native runs; never reads a checkpoint. */
   legacyNativeRuns: LegacyNativeRunGuard
   agentEngine: AgentEngine
+  checkWorkerReady?: () => Promise<void>
 }
 
 /** Builds the §6.1/§6.2 route table on top of the native http handler. */
@@ -59,7 +60,13 @@ export function createApiHandler(deps: RouteDeps): ApiHandler {
         return sendJson(ctx.res, 503, { status: 'unavailable' })
       }
       const readiness = await deps.pluginCore.healthReady()
-      return sendJson(ctx.res, readiness.status === 'ok' ? 200 : 503, readiness)
+      if (readiness.status !== 'ok') return sendJson(ctx.res, 503, readiness)
+      try {
+        if (!deps.checkWorkerReady) throw new Error('worker readiness unavailable')
+        await deps.checkWorkerReady()
+      } catch { return sendJson(ctx.res, 503, { status: 'unavailable' }) }
+      const current = await deps.pluginCore.healthReady()
+      return sendJson(ctx.res, current.status === 'ok' ? 200 : 503, current)
     }
 
     if (segments[2] === 'plugin-core') {

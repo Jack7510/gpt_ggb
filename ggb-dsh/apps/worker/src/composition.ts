@@ -76,6 +76,8 @@ export async function composeWorker(env: NodeJS.ProcessEnv = process.env, depend
     retryMalformedResponse: true,
   })
 
+  let draining = false
+  const verifyResources = dependencies.verifyResources ?? assertPluginCoreRuntime
   const channel = new InternalChannelServer(
     {
       socketPath: config.socketPath,
@@ -84,6 +86,12 @@ export async function composeWorker(env: NodeJS.ProcessEnv = process.env, depend
       maxMessageBytes: MAX_CHANNEL_MESSAGE_BYTES,
     },
     {
+      ready: async () => {
+        if (draining) throw new Error('worker_draining')
+        await verifyResources(plugin, config.pluginCoreOutputRoot)
+        if (pool !== null) await assertPluginCoreSchema(pool)
+        if (draining) throw new Error('worker_draining')
+      },
       pluginCore: async (request, onProgress) => await service.run({
         runId: request.runId,
         deliveryContract: request.deliveryContract,
@@ -105,7 +113,7 @@ export async function composeWorker(env: NodeJS.ProcessEnv = process.env, depend
       await assertProcessScopeSupported()
       await state.fenceOrphans()
       await sweepRunFiles(config.pluginCoreOutputRoot, service.activeRunIds())
-      await (dependencies.verifyResources ?? assertPluginCoreRuntime)(plugin, config.pluginCoreOutputRoot)
+      await verifyResources(plugin, config.pluginCoreOutputRoot)
       if (pool !== null && config.autoMigrate && config.migrationsDir !== null) {
         const applied = await runMigrations(pool, config.migrationsDir)
         if (applied.length > 0) console.log(`[worker] applied migrations: ${applied.join(', ')}`)
@@ -126,6 +134,7 @@ export async function composeWorker(env: NodeJS.ProcessEnv = process.env, depend
       }
     },
     async dispose(): Promise<void> {
+      draining = true
       if (retentionTimer) clearInterval(retentionTimer)
       await service.stopAll(config.drainGraceMs)
       await channel.close()

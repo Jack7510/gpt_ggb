@@ -82,7 +82,7 @@ describe('default installed composition', () => {
       expect(captured?.patches).toEqual([require.resolve('ggb-plugins-dsh/server.patch.yml'), expect.stringContaining('stream-evidence.patch.json'), expect.stringContaining('host-policy.patch.json')])
       expect(captured?.reasoningEffort).toBe('high')
       expect(captured?.env?.GGB_DSH_SDK_VERSION).toBe('0.2.1-rc.2')
-      expect(verifyResources).toHaveBeenCalledOnce()
+      expect(verifyResources).toHaveBeenCalledTimes(2)
     } finally { client.close(); await worker.dispose(); await rm(temp, { recursive: true, force: true }) }
   }, 15_000)
 })

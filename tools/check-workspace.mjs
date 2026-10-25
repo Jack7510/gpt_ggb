@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const allowed = new Set(['check', 'check:fast', 'check:client', 'check:api', 'check:worker',
-  'typecheck', 'test', 'quality'])
+  'check:deploy', 'typecheck', 'test', 'quality'])
 
 /**
  * Use the workspace's existing script as the sole source of check order.

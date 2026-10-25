@@ -9,6 +9,17 @@ permissions:
   contents: read
 
 jobs:
+  deployment-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Offline systemd and installed-plugin configuration checks
+        run: node --test ggb-dsh/tools/deployment.test.mjs
+
   ggb-dsh-offline:
     runs-on: macos-14
     timeout-minutes: 15
@@ -85,7 +96,7 @@ jobs:
       - name: Official archive, actual Client engine and active old Worker upgrade
         run: pnpm run verify:runtime-release
       - name: Fresh isolated SDK homes, exact tools and Worker Skill, with network denied
-        run: node tools/verify-installed-plugin-sdk.mjs --plugin-tgz vendor/ggb-plugins-dsh-0.8.3.tgz --sdk-root apps/worker --output "$GGB_RUNTIME_EVIDENCE/sdk"
+        run: node tools/verify-installed-plugin-sdk.mjs --plugin-tgz "vendor/$(node -p 'require("./vendor/plugin-core.lock.json").archive')" --sdk-root apps/worker --output "$GGB_RUNTIME_EVIDENCE/sdk"
       - name: Mock Harness with real PWA delivery, Directrix interactions and baseline continuation
         run: pnpm run verify:plugin-core:pwa:mock --authorized --out "$GGB_RUNTIME_EVIDENCE/pwa"
       - uses: actions/upload-artifact@v4

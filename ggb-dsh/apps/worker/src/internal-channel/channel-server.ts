@@ -23,6 +23,8 @@ export interface InternalChannelServerConfig {
 
 /** What the channel server forwards into the worker; auth is already verified. */
 export interface InternalChannelHandler {
+  /** Admission and installed resource checks; never starts a model or browser. */
+  ready?(): Promise<void>
   /** One independent plugin-core run. */
   pluginCore?(request: ChannelPluginCoreRequest, onProgress: PluginCoreProgressObserver): Promise<Omit<ChannelPluginCoreResult, 'type' | 'requestId'>>
   /** Cancel one in-flight plugin-core run. */
@@ -120,6 +122,8 @@ export class InternalChannelServer {
         this.respondError(socket, requestId, 'request_invalid')
         return
       }
+      try { await this.handler.ready?.() }
+      catch { this.respondError(socket, requestId, 'handler_failed'); return }
       this.write(socket, {
         type: 'handshake.accepted',
         protocolVersion: INTERNAL_CHANNEL_PROTOCOL_VERSION,

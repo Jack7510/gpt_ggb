@@ -1,233 +1,201 @@
 # GGB DSH 部署指南
 
-本文定义 `ggb-dsh/` 的本地验证、生产发布、运行与回滚边界。它适用于本仓库的两进程服务
-（`apps/api` + `apps/worker`）与唯一的 **plugin-core** 执行引擎。
+当前云主机使用 **Node + systemd + 已安装 DSH 插件**。API 与 Worker 是同一主机上的两个进程。
+Worker 核对插件安装身份，将安装包的 server patch 交给 DSH 注册四工具与 Worker Skill。
+工具请求经 Worker 网关调用插件执行器。插件身份以发行锁和安装描述为准。
 
-架构与取舍见 [plugin-core 采用方案](ggb-dsh-plugin-core-adoption.md) 与
-[切换交接](ggb-dsh-plugin-core-cutover-handoff.md)；日常本地开发与调试见
-[ggb-dsh README](../ggb-dsh/README.md)。本文不记录真实主机地址、数据库 URL、TLS 私钥或任何 API Key。
+架构契约见 [安装式插件设计](ggb-dsh-installed-plugin-design.md)；验收状态见
+[统一 Backlog](ggb-dsh-backlog.md)。本文不记录真实主机地址、数据库 URL、证书私钥或 Provider Key。
 
 ## 1. 生产拓扑
 
-```text
-Browser PWA
-  │ same-origin HTTPS, Authorization: Bearer <runToken>
-  │ X-GGB-Provider-Key only while submitting a run
-  ▼
-Edge Nginx (TLS, public Host allowlist, SSE proxying, no request-body logging)
-  │ 127.0.0.1:8080
-  ▼
-ggb-dsh-server container (non-root)
-  ├─ apps/api     HTTP/SSE, static PWA/GeoGebra assets, plugin-core runs, TTL janitor
-  ├─ apps/worker  plugin-core runner, DSH turn, tool gateway
-  ├─ tmpfs Unix sockets and per-run scratch / DSH home
-  └─ PostgreSQL   plugin_core_runs/events/artifacts/usage
+```mermaid
+flowchart LR
+  subgraph Browser[用户浏览器]
+    PWA[PWA / 本地会话 / 加密 BYOK]
+  end
+  subgraph Host[云主机]
+    Edge[Nginx / HTTPS / SSE 代理]
+    API[Node API / 静态资源 / run 鉴权]
+    Worker[Node Worker / DSH SDK / 工具网关]
+    DSH[每 turn 的 DSH SDK Server]
+    Adapter[已安装插件 / server patch / Worker Skill]
+    Executor[受控插件执行器]
+    Runtime[Playwright Chromium / GeoGebra]
+    DB[(PostgreSQL)]
+  end
+  Provider[DeepSeek Provider]
+  PWA -->|HTTPS / SSE / runToken| Edge
+  Edge -->|loopback HTTP| API
+  API -->|认证 Unix socket| Worker
+  Worker -->|启动 / 注入安装身份| DSH
+  DSH -->|加载| Adapter
+  Adapter -->|认证工具请求| Worker
+  Worker -->|受控启动| Executor
+  Executor --> Runtime
+  DSH -->|本次执行的 BYOK| Provider
+  API --> DB
+  Worker --> DB
 ```
 
-- 首版使用一个镜像、一个容器、两个进程（`entrypoint.sh both`）。API 与 Worker 通过容器内 tmpfs Unix
-  socket 通信。
-- PostgreSQL 是生产 plugin-core run/event/artifact/usage 的事实源；SQLite 仅用于本机验证，
-  Memory store 仅用于测试。
-- 浏览器的 Session、消息历史、画布快照和加密 BYOK vault 不上传。Server 不保存 Provider Key、
-  用户账户或产品 Session。
-- 公网只暴露 Edge。容器 API 端口只绑定 loopback 或私有网络；不可直接暴露 `:8080`。
+API 提供 PWA 与同源 GeoGebra 静态资源。systemd 管理进程、重启和进程组回收。
+PostgreSQL 保存 run、事件、产物与用量事实。浏览器 Session 和加密 BYOK vault 保存在浏览器。
+Provider Key 仅在本次执行期间传给服务端，不写入部署配置或数据库。
+公网只暴露 Nginx；API 监听 `127.0.0.1:8080`。
 
-## 2. 发布前条件
+## 2. 路径与入口
 
-1. 使用 `ggb-dsh/config/runtime-versions.json` 指定的 Node、pnpm、DSH 与 GeoGebra 兼容版本。
-2. 使用专用 PostgreSQL 数据库与最小权限的发布账号；发布前完成备份和恢复演练。
-3. 配置单一 HTTPS 域名、DNS 和证书。PWA、API、SSE 与 GeoGebra runtime 必须同源。
-4. 准备两个不同的 32-byte 随机 secret 文件，权限为 `0600`：
-   `server-pepper`、`worker-secret`。内容必须是 64 位小写十六进制。
-5. 在一个可审计的 release checkout 中构建统一的 `ggb-dsh/` workspace。内部包使用本地链接，
-   外部依赖由 `pnpm-lock.yaml` 固定。镜像必须使用同一 Git revision 的应用、内部包和 lockfile。
-6. 确认固定 GeoGebra 版本的同源分发许可适用于目标部署；商业用途须先完成独立许可审查。
-7. 供应 plugin-core runtime 与固定 GeoGebra runtime；缺资源时 Worker 在监听前失败。
+路径沿用 [`tools/deploy-ggb-dsh.sh`](../tools/deploy-ggb-dsh.sh) 的仓库布局。
+`REPO` 表示仓库根目录，不是固定的主机安装目录。
 
-生产环境不需要、也不得配置 DeepSeek 平台 API Key。它由最终用户在浏览器中保存，并仅按 run 通过
-`X-GGB-Provider-Key` 短暂传给 Worker。
+| 对象 | 路径与契约 |
+| --- | --- |
+| 应用工作区 | `$REPO/ggb-dsh`；systemd 安装器从自身位置推导该路径 |
+| 插件源码 | `$REPO/ggb-plugins`；仅源码验证需要，也可由本地启动器 `--plugin` 指定 |
+| 固定插件安装 | `$REPO/ggb-dsh/.plugin-core-runtime/<archiveSha256>`；摘要读取 `vendor/plugin-core.lock.json` |
+| Client 静态资源 | 工作区下 `apps/client/dist`，其中包含 `geogebra/` 与 runtime manifest |
+| 本地源码覆盖安装 | `$REPO/output/deploy-ggb-dsh/run-*/plugin`，与同次 `workspace/vendor/plugin-core.lock.json` 配对 |
+| 生产配置与 secret | `/etc/ggb-dsh/server.env`、`/etc/ggb-dsh/secrets/` |
+| 生产 socket 与临时目录 | `/run/ggb-dsh/`；socket、DSH home 与缓存随服务生命周期清理 |
+| 持久执行状态 | `/var/lib/ggb-dsh/plugin-core-runs`；保留执行所有权、隔离标记与诊断，独立于 `/run` |
 
-## 3. 构建与离线验证
+本地启动器从安装包供应依赖和 runtime，再生成隔离的源码覆盖安装。`installation.json` 记录
+`pluginRoot`、`privateLock`、`developmentPayloadSha256` 和 `workerSkillSha256`。
+该启动器明确拒绝 `NODE_ENV=production` 和 PostgreSQL 目标，不作为生产 systemd 的 `ExecStart`。
+生产直接运行构建后的 API/Worker，并加载经过核验的插件安装。
+
+## 3. 发布前条件与构建
+
+1. 核对 `config/runtime-versions.json` 中的 Node、pnpm、DSH、插件和 GeoGebra 兼容组合。
+2. 准备专用 PostgreSQL 数据库、运行账号与迁移账号，确认备份和恢复方案。
+3. 配置单一 HTTPS 域名。PWA、API、SSE 与 GeoGebra runtime 必须同源。
+4. 准备两个不同的 32-byte 随机 secret 文件：`server-pepper`、`worker-secret`。
+   内容必须是 64 位小写十六进制。文件权限为 0600，并允许服务用户读取和遍历父目录。
+5. 确认固定 GeoGebra runtime 的同源分发许可适用于部署用途。
+
+以下命令在 `$REPO/ggb-dsh` 执行。以能够访问工作区的部署账号供应资源；不要混用其他账号的浏览器缓存。
 
 ```bash
-(cd ggb-dsh && pnpm install --frozen-lockfile && pnpm run provision:plugin-core && pnpm run provision:geogebra)
-(cd ggb-dsh && pnpm run verify:plugin-core:release && pnpm run check)
-
-docker build -f ggb-dsh/deploy/container/Dockerfile \
-  -t ggb-dsh-server:<release-id> .
+pnpm install --frozen-lockfile --ignore-scripts
+pnpm run verify:plugin-core:release
+plugin_sha=$(node -p 'require("./vendor/plugin-core.lock.json").archiveSha256')
+plugin_root="$PWD/.plugin-core-runtime/$plugin_sha"
+node tools/provision-plugin-core.mjs --target "$plugin_root" --browsers "$plugin_root/ms-playwright"
+pnpm run provision:geogebra
+pnpm run check
 ```
 
-`provision:geogebra` 会写入受 Git 忽略的固定 runtime 与 manifest；API 会在启动前核验 manifest、
-版本、必要文件、固定补丁审计字段与实际 asset SHA-256。不匹配时拒绝监听。`provision:plugin-core` 从 vendored TGZ 供应插件依赖、Chromium 和固定 GeoGebra
-runtime，并运行插件 `doctor`。两者都必须在 Docker build 前完成。
+供应器核对 TGZ、sidecar、发行锁和 runtime 配置，安装插件依赖、Chromium 和 GeoGebra，并运行 doctor。
+完整供应需要网络与目标 Linux 的 Chromium 系统依赖。缺资源时应停止发布；不要使用
+`--dependencies-only` 供应结果启动业务 Worker。供应器拒绝覆盖已有目标；已存在的安装应先核对身份与完整性。
 
-发行准入还要求实际 TGZ、vendor sidecar、vendor lock 与 runtime 配置中的发行摘要四者一致。
-`update-plugin-core.mjs` 同步生成 sidecar；`verify:plugin-core:release`、默认测试入口和 CI 拒绝不一致组合。
-在 vendor 目录执行 `shasum -a 256 -c ggb-plugins-dsh-0.8.3.tgz.sha256` 必须通过。
+`provision:geogebra` 从同一固定安装加载兼容补丁，生成 Client 同源资源和 manifest。
+构建后的 API 会核对 runtime 版本与摘要。所有应用、内部包、lockfile 和插件必须来自经过审查的同一发布组合。
+记录 Git revision、`pnpm-lock.yaml`、runtime 配置、插件锁及安装路径，供后续回滚核对。
 
-目标环境发布后，另行授权并运行 PWA 验收，确认 active v2 Worker 升至 v3、旧缓存清理、新 engine 摘要，
-以及 Directrix 路径点隐藏标签后的重载、拖动与缩放。无需真实 Provider；本机升级测试不代替目标环境验收。
-
-运行镜像包含固定插件安装根、`vendor/plugin-core.lock.json`、`knowledge/` 与 `tools/`。
-Worker 校验包文件摘要和兼容组合后，从插件公开 server patch 加载四工具和 Worker Skill。
-旧宿主 profile、工具包和专属包装器已删除。将本次 release 的 Git revision、容器 image digest、`pnpm-lock.yaml`、
-`config/runtime-versions.json` 与 `vendor/plugin-core.lock.json` 一并留存在发布系统。
-
-当前批次只更新部署资产，未构建镜像或部署生产。供应器拒绝覆盖已有目标；每次发布使用新的安装根，
-完整供应成功后再切换配置。`--dependencies-only` 仅供离线协议检查，不能用于业务启动。
-
-插件源码改动尚未进入 vendor TGZ 时，使用[插件源码手工验证](ggb-dsh-plugin-manual-verification.md)启动本地测试安装；该流程不更新 vendor 锁或生产发行包。
+部署文件的离线检查为 `pnpm run check:deploy`。该检查验证 unit 渲染、预检逻辑与拒绝分支，不安装服务、
+不调用 Provider、不启动 GeoGebra。它已接入默认测试与 Linux CI。API/Worker 的就绪通道与持久化回归由 Vitest 覆盖。
+Linux 检查还调用 `systemd-analyze verify` 验证渲染后的 unit，不启动服务。
 
 ## 4. 生产配置
 
-从 [server.env.example](../ggb-dsh/deploy/systemd/server.env.example) 建立仅部署环境可读的配置文件。
-该文件不能提交、复制到镜像或暴露给浏览器。
+以 [server.env.example](../ggb-dsh/deploy/systemd/server.env.example) 建立 `/etc/ggb-dsh/server.env`。
+该文件由 systemd 和预检入口读取，保持 root 所有且权限为 0600。替换数据库、域名与浏览器路径占位符。
+预检接受单行 `KEY=value` 与单层引号，不接受 export、重复键、反斜杠转义或多行值。
+值按字面量读取，不执行 shell 表达式或展开变量。
+不要向其中写入 DeepSeek Key；产品使用用户浏览器提供的 BYOK。
 
-至少设置：
+- `GGB_V3_CLIENT_DIST_DIR=apps/client/dist` 等相对路径以 unit 的 `WorkingDirectory` 为基准。
+- 不设置 `GGB_V3_DSH_WORKSPACE_ROOT` 时，Worker 使用当前工作区的发行锁。
+- 不设置 `GGB_PLUGIN_ROOT` 时，Worker 从发行锁推导 `.plugin-core-runtime/<archiveSha256>`。
+- `PLAYWRIGHT_BROWSERS_PATH` 必须是供应命令中 `--browsers` 的同一绝对路径，不能使用占位符或其他用户的缓存。
+- `GGB_V3_AUTO_MIGRATE=0`；迁移必须先单独执行。
+- `GGB_PLUGIN_CORE_OUTPUT_ROOT=/var/lib/ggb-dsh/plugin-core-runs` 必须使用持久目录；不把 owner、quarantine 或诊断放在 `/run`。
+- `GGB_PLUGIN_CORE_MAX_CONCURRENT_RUNS` 与 API admission 共用容量配置，初始值为 1。
 
-```dotenv
-NODE_ENV=production
-PORT=8080
-GGB_AGENT_ENGINE=plugin_core
-
-GGB_V3_DATABASE_URL=postgres://<user>:<password>@<db-host>:5432/<database>
-GGB_V3_AUTO_MIGRATE=0
-GGB_V3_MIGRATIONS_DIR=packages/run-persistence/migrations
-
-GGB_V3_ALLOWED_ORIGIN=https://<public-host>
-GGB_V3_ALLOWED_HOSTS=<public-host>
-GGB_V3_CLIENT_DIST_DIR=/app/apps/client/dist
-GGB_V3_GEOGEBRA_ROOT=/app/apps/client/dist/geogebra
-GGB_V3_RUNTIME_VERSIONS_PATH=/app/config/runtime-versions.json
-
-GGB_V3_SERVER_PEPPER_FILE=/run/ggb/server-pepper
-GGB_V3_WORKER_SECRET_FILE=/run/ggb/worker-secret
-GGB_V3_WORKER_SOCKET_PATH=/run/ggb/worker.sock
-
-GGB_V3_DSH_HOME_ROOT=/dsh-home
-GGB_V3_PROVIDER_BASE_URL=https://api.deepseek.com/anthropic
-GGB_PLUGIN_ROOT=/opt/ggb-plugin
-GGB_PLUGIN_CORE_OUTPUT_ROOT=/var/lib/ggb-dsh/plugin-core-runs
-GGB_PLUGIN_CORE_MAX_CONCURRENT_RUNS=1
-```
-
-同时根据容量设定 body 限额、run/artifact TTL、drain grace 和 plugin-core 并发。API admission 上限与
-Worker 并发必须共同评估；不要以无限排队替代过载拒绝。
+如需发布已审查的源码覆盖安装，必须成对设置 `GGB_PLUGIN_ROOT` 与 `GGB_V3_DSH_WORKSPACE_ROOT`，
+分别指向同次 `installation.json` 的 `pluginRoot` 和 `privateLock` 所属工作区。
+同时核对供应时的浏览器路径。不得将源码覆盖安装与仓库正式发行锁混用。
+源码准备流程见 [插件源码手工验证](ggb-dsh-plugin-manual-verification.md)。
 
 ## 5. 数据库迁移
 
-每次包含迁移的发布必须先备份 PostgreSQL，并在 API admission 打开前执行一次性迁移：
+在 API admission 打开前，先备份目标 PostgreSQL，再于工作区执行一次性迁移。
+数据库 URL 由部署环境安全注入 `GGB_V3_DATABASE_URL`；不要将真实连接串写入命令历史或仓库。
 
 ```bash
-cd ggb-dsh
-GGB_V3_DATABASE_URL='postgres://<user>:<password>@<db-host>:5432/<database>' \
-  node deploy/migrations/apply.mjs
+node deploy/migrations/apply.mjs
 ```
 
-`apply.mjs` 只应用 `017_plugin_core.sql` 和 `018_plugin_core_delivery_contract.sql`。017 创建 `plugin_core_runs`、`plugin_core_events`、
-`plugin_core_artifacts` 与 `plugin_core_usage`；018 固定每个 run 的 `delivery_contract`，SQL 默认值 legacy 用于保留历史行；新应用显式写入 receipt-v1。迁移文件 001–016 保留为历史，不会被启动流程或
-迁移 job 应用；它们不创建 Native 表。
+当前迁移入口只应用 `017_plugin_core.sql` 与 `018_plugin_core_delivery_contract.sql`，
+建立插件 run/event/artifact/usage 表并固定交付契约。API/Worker 启动时核对 schema ledger。
+缺少 018 时拒绝启动。迁移失败时停止发布，核对 ledger 与备份；不要跳过迁移或修改 ledger 强行启动。
+数据库恢复必须按单独授权的方案执行，不自动逆迁移或删除历史数据。
 
-API 与 Worker 启动时通过 `assertPluginCoreSchema` 确认 ledger 已记录 018；缺失或 ledger 不存在时
-在监听前拒绝启动，不回退到 Native。API/Worker 必须一起升级至内部通道 8。生产保持 `GGB_V3_AUTO_MIGRATE=0`，避免 API 与 Worker 启动竞态。
-若迁移失败，停止发布，核对 ledger 与备份后按授权的恢复方案处置；不要通过修改 `schema_migrations`
-或跳过 migration 来强行启动服务。
+## 6. 渲染与安装 systemd 服务
 
-旧 Native 表/行保留为证据，不做破坏性迁移。需要审计时直接读取旧表或旧 SQLite 快照，不通过当前 API。
+服务账号必须是已有的非 root 用户，且能读取工作区、插件安装、浏览器资源和两份 secret。
+安装器沿用启动脚本的仓库定位方式，并从 `NODE_BINARY` 或当前 PATH 选择 Node 的绝对路径。
+unit 模板内的 `@WORKSPACE@`、`@USER@`、`@GROUP@` 与 `@NODE@` 由安装器替换；不要直接复制模板到 `/etc`。
 
-## 6. 启动服务
-
-首版容器以只读根文件系统运行；必须为 sockets、plugin-core 输出和 DSH home 提供可写 tmpfs，并只读挂载
-secret 文件。以下是运行形态示例，实际编排系统应采用等价的 secret store、health check、日志收集和
-restart policy：
+先在仓库根目录预览。将 `<service-user>` 替换为实际运行账号：
 
 ```bash
-docker run -d --name ggb-dsh-server --restart unless-stopped \
-  --read-only \
-  -p 127.0.0.1:8080:8080 \
-  --env-file /etc/ggb-dsh/server.env \
-  --tmpfs /run/ggb:rw,noexec,nosuid,size=16m \
-  --tmpfs /dsh-home:rw,noexec,nosuid,size=512m \
-  -v /etc/ggb-dsh/secrets/server-pepper:/run/ggb/server-pepper:ro \
-  -v /etc/ggb-dsh/secrets/worker-secret:/run/ggb/worker-secret:ro \
-  -v /var/lib/ggb-dsh/plugin-core-runs:/var/lib/ggb-dsh/plugin-core-runs:rw \
-  ggb-dsh-server:<release-id> both
+sh ggb-dsh/deploy/systemd/install.sh <service-user> --render output/systemd-preview
 ```
 
-镜像内进程以 UID 10001 运行。挂载点及 secret 文件必须可被该 UID 读取；不要用 `--privileged`、
-宿主 home 挂载或可写镜像层来规避权限问题。
-
-如需将 API 与 Worker 拆为独立 workload，必须让两者安全共享同一个 Unix socket namespace、
-对应 secret 和同一个 PostgreSQL 事实源，并先通过 drain、重复请求与 stop 的故障矩阵验证。
-首版默认不采用此拓扑。
-
-### 无 Docker 的 Node + systemd 部署
-
-目标主机缺少 Docker 时，可使用仓库受控的
-[`deploy/systemd/`](../ggb-dsh/deploy/systemd/) 单元。它在同一主机上以两个受限的 Node 进程运行 API 与
-Worker，共享 `RuntimeDirectory=ggb-dsh` 的 0750 Unix socket/scratch 目录；仍然需要 PostgreSQL，
-不能退回 SQLite。
-
-在安装前，以 [`server.env.example`](../ggb-dsh/deploy/systemd/server.env.example) 建立
-`/etc/ggb-dsh/server.env`（权限 0600），将 `GGB_V3_DSH_HOME_ROOT`、`GGB_V3_WORKER_SOCKET_PATH`
-与 `GGB_PLUGIN_CORE_OUTPUT_ROOT` 指到 `/run/ggb-dsh/` 下，并将两份 0600 secret 文件放入
-`/etc/ggb-dsh/secrets/`。安装 unit 后，再依次启动 Worker、API：
+预览不会安装或启动服务。核对生成的工作区、用户、Node 版本和可读权限。
+路径与账号名称限字母、数字、`_`、`.`、`/` 和 `-`，避免 unit 展开与模板替换歧义。
+渲染预览只验证模板，不证明安装资源可用。发布前，在已授权的目标环境执行只读预检：
 
 ```bash
-sudo sh ggb-dsh/deploy/systemd/install.sh
+sudo env NODE_BINARY=<absolute-node-path> sh ggb-dsh/deploy/systemd/install.sh <service-user> --check
+```
+
+预检先以 root 读取 `/etc/ggb-dsh/server.env`，检查占位符、生产配置及持久路径。
+随后通过 Linux `runuser` 切换到服务账号，使用 stdin 传入配置；数据库 URL 不进入命令参数。
+服务账号检查 Node 兼容范围、两份不同的 0600 secret、编译入口、发行包摘要、插件安装、
+Chromium/runtime 文件和 PWA manifest。它复用应用现有配置、安装与静态资源校验器。
+预检不启动 API/Worker、浏览器或模型，不连接数据库，也不执行迁移。
+已有持久目录必须可读写；首次不存在的目录由 systemd 的 `StateDirectory` 创建。
+缺少 runuser、账号不可访问资源或校验失败时，预检返回非零状态；错误输出不包含配置与 secret 正文。
+
+预检通过后，在已授权的目标环境执行：
+
+```bash
+sudo env NODE_BINARY=<absolute-node-path> sh ggb-dsh/deploy/systemd/install.sh <service-user>
 sudo systemctl start ggb-dsh-worker.service
 sudo systemctl start ggb-dsh-api.service
 sudo systemctl status ggb-dsh-worker.service ggb-dsh-api.service --no-pager
 ```
 
-unit 的 `WorkingDirectory` 固定为当前正式 checkout
-`/home/admin/work/ggb-dsh/ggb_copilot/ggb-dsh`；迁移到其他主机路径时，先在 Git 中调整模板并审查后再安装，
-不要在 `/etc/systemd/system` 直接维护不可追踪的副本。
-
-### plugin-core 运行时（systemd）
-
-插件核心需要独立的 Chromium、GeoGebra runtime 和插件依赖。发布前以 root 从 vendored TGZ
-供应到只读目录：
-
-```bash
-cd /home/admin/work/ggb-dsh/ggb_copilot/ggb-dsh
-sudo env PLAYWRIGHT_BROWSERS_PATH=/opt/ggb-plugin/ms-playwright \
-  node tools/provision-plugin-core.mjs --target /opt/ggb-plugin
-sudo chown -R root:root /opt/ggb-plugin
-```
-
-`provision-plugin-core.mjs` 先核对 `vendor/plugin-core.lock.json` 与 TGZ 的 SHA-256，再安装生产依赖、
-Playwright Chromium、固定 GeoGebra runtime，并运行插件 `doctor`。缺少任一资源时 Worker 启动失败，
-不会把请求转发到不完整的插件树。`GGB_PLUGIN_ROOT`、`PLAYWRIGHT_BROWSERS_PATH`、
-`GGB_PLUGIN_CORE_OUTPUT_ROOT` 必须与供应目录一致；`GGB_PLUGIN_CORE_MAX_CONCURRENT_RUNS`
-限制同时执行的插件 run，缺省为 1。`/run/ggb-dsh` 由 service 用户写入，`/opt/ggb-plugin` 只读。
-Playwright 默认以 `chromiumSandbox: false` 启动；如需启用内核沙箱，应在目标主机单独验证后再改动。
-
-**历史本机静态验证（2026-10-17，旧发行包）：** 用 vendored TGZ 供应到 `.plugin-core-runtime`，插件 `doctor`
-通过（Chromium、GeoGebra 5.4.932.1、CAS/native smoke）。这些结果不代表当前固定发行包已通过 doctor 或浏览器回归。Dockerfile 与 `server.env.example` 的插件路径已静态核对；
-本机无 Docker daemon，镜像构建、容器内 Chromium 启动和 `/opt/ggb-plugin` 只读挂载仍需在目标环境执行。
-systemd unit 在本机用现有 node 路径替换后 `systemd-analyze verify` 无告警；目标机需确认
-`/usr/bin/node` 存在，并按第 5 节确认 `018_plugin_core_delivery_contract.sql` 已登记。
+安装器在每次安装前强制执行同一预检，通过后才安装并 enable unit；失败时不写 unit、不调用 systemctl。
+安装器不自动启动服务或迁移数据库。
+服务在只读文件系统视图下运行；socket、home、cache、scratch 在 `/run/ggb-dsh/`。
+Worker 通过 `StateDirectory=ggb-dsh` 和 0700 权限管理 `/var/lib/ggb-dsh`。
+执行所有权与隔离标记在服务或主机重启后保留；未知执行仍由启动时的 fence 检查隔离，不自动重放或清除。
+配置变更不自动搬迁旧 `/run` 内容。若目标环境已有旧数据，须先按授权停机并确认进程退出，再迁移需保留的状态和诊断；不得只删除隔离标记来释放槽位。
+unit 使用 `KillMode=control-group` 回收同一 cgroup 的子进程。
+Worker 的强制停机窗口为 150 秒，API 为 45 秒；自定义应用 drain 时须同步核对外层停机窗口。
+真实 Chromium 崩溃后的回收必须在目标 Linux 上验收，离线 unit 检查不能替代该验收。
 
 ## 7. Edge 与 TLS
 
-以 [Edge Nginx 配置](../ggb-dsh/deploy/edge/nginx.conf) 为起点，替换示例域名与证书路径后安装。若使用
-cpolar 在公网终止 TLS 并转发至本机 HTTP 80，则使用
-[`deploy/systemd/nginx-ggb-app.conf`](../ggb-dsh/deploy/systemd/nginx-ggb-app.conf)，不要在该主机重复配置证书。
-Edge 必须：
+[Nginx HTTPS 模板](../ggb-dsh/deploy/edge/nginx.conf) 代理到 `127.0.0.1:8080`。
+若当前主机由 cpolar 终止公网 TLS，使用 [cpolar HTTP 模板](../ggb-dsh/deploy/systemd/nginx-ggb-app.conf)。
+将对应模板的域名、证书路径与 API allowlist 对齐。
 
-- 只接受配置的 HTTPS Host，并将请求代理到 `127.0.0.1:8080`；
-- 对 `/api/` 关闭 proxy buffering/cache，设置足够的 SSE `proxy_read_timeout`；
-- 透传 `Authorization`，但日志、WAF、APM 和错误转储不得记录它或 `X-GGB-Provider-Key`；
-- 不额外下发 CSP，主 UI 与 GeoGebra 专用 document 的 CSP 由 API 分别下发；
-- 不添加跨域 CORS 头，不把 API 改写为静态 PWA fallback，不开启反向代理重试；
-- 将 `client_max_body_size` 与 `GGB_V3_MAX_BODY_BYTES` 保持一致。
+- `/api/` 禁用 buffering、cache 与上游重试，SSE 读取超时为 1 小时。
+- Nginx 请求体上限为 40 MiB，与 `GGB_V3_MAX_BODY_BYTES=41943040` 一致。
+- 透传 Authorization；日志、WAF、APM 不得记录 Key、runToken、题目或请求体。
+- CSP 由 API 根据 PWA shell 与 GeoGebra document 分别下发，Edge 不追加 CSP 或跨域头。
+- 未知 API 路径不得改写成静态 PWA fallback，公网防火墙不得直接开放 API 端口。
 
-修改 Edge 后执行 `nginx -t` 再 reload。公网防火墙不得直接开放容器 API 端口。
+修改目标配置后，先执行 `nginx -t` 再 reload。
 
 ## 8. 发布验收
 
-先进行无需 Provider Key 的健康和静态资源验证：
+先做无需 Provider Key 的健康与静态资源验证：
 
 ```bash
 curl -fsS -H 'Host: <public-host>' http://127.0.0.1:8080/api/v3/health/live
@@ -237,73 +205,43 @@ curl -fsSI https://<public-host>/
 curl -fsSI https://<public-host>/geogebra/deployggb.js
 ```
 
-再检查：
+再核对静态资源 manifest、CSP、API/SSE 的 no-store、未知 API 的 JSON 404，以及数据库迁移状态。
+就绪接口先检查 API admission，再通过新 Unix socket 连接完成认证握手。Worker 在接受握手前检查
+插件 runtime 文件、输出目录和 PostgreSQL schema，并在 drain 时拒绝握手。探针超时不超过 3 秒，
+实际使用更小的通道 ack 配置时按该配置超时。缺失探针、认证失败、资源缺失、schema 异常或断连返回 503；
+API 在握手完成后再次检查 drain。`health/live` 继续只表示 API 存活。
+握手沿用现有协议，不执行构图、不调用 Provider 或启动浏览器，因此不能代替真实构图验收。
+检查 Worker 日志中的安装身份和 Worker Skill 摘要，确认实际加载的是本次发布的插件。
 
-1. 未知 `/api/` 路径返回 JSON 404，而不是 `index.html`；`/api/v3/health/ready` 在 drain 时拒绝新 run。
-2. 响应头分别符合 shell 与 GeoGebra document 的 CSP，且 API/SSE 为 `no-store`。
-3. Edge 日志不含 Authorization、Provider Key、prompt、Canvas XML 或 runToken。
-4. PostgreSQL 中不存在 users、tenants、Session、credential 或 Provider Key 字段；TTL janitor 可处理过期
-   plugin-core run 与 artifact。
-5. 旧 Native 请求语义正确：`POST /api/v3/runs` → 409 `engine_not_supported`；其他旧路径在 token
-   验证后 409 `checkpoint_incompatible` 或 404。
-6. fake Provider/plugin 集成与 channel 测试通过；真实 Provider smoke 只在明确授权后执行。
+目标环境还需验收 PWA 升级、SSE 重连、取消、下载与续做；终止 Worker 后应回收浏览器子树，且不自动重放任务。
+真实 Provider 构图会产生费用，必须单独授权，并使用专用测试 Key 和题目。
+本机测试或历史输出不能充当目标环境证据。
 
-真实 DeepSeek + GeoGebra smoke 会产生费用并处理用户题目，只能在明确授权的预发或发布门禁执行。
-不得使用生产用户 Key、Prompt、截图或 runToken 作为测试样本。
+## 9. 监控与排障
 
-## 9. 监控、排障与保留
+收集 API/Worker 的脱敏摘要、稳定错误码、耗时与用量。关注 admission reject、插件容量、执行失败、
+Provider 延迟、SSE 重连与背压、TTL 清理失败。排障优先看结构化 diagnostics 与 runner 产物。
+不得通过开启请求体日志收集 Key 或题目；运行目录与日志按保留策略清理，不进入 Git。
 
-- 采集 API/Worker stdout 的结构化摘要：request/run ID、耗时、token、稳定错误码和安全指标。
-  禁止采集 prompt 全文、模型全文、图片、画布 XML、Key 或 token。
-- 关注 admission reject、plugin-core capacity、plugin runner failure、Provider latency、SSE
-  reconnect/backpressure、artifact orphan 与 TTL cleanup failure。
-- 先用 `health/live` 区分进程存活，再用 `health/ready` 判断是否可接新 run。
-- 排障优先读取脱敏 diagnostics 与 `GGB_PLUGIN_CORE_OUTPUT_ROOT` 下的 runner 产物；
-  不通过开启请求体日志来收集 Key 或题目。
+## 10. 更新与回滚
 
-## 10. 更新、缩容与回滚
+发布顺序为：核对发布身份 → 备份与迁移 → 停止旧服务 admission 并 drain → 替换经过验证的发布组合
+→ 依次启动 Worker/API → 核对 ready、插件身份与公网静态资源 → 观察指标。
+停机后确认插件进程、socket 和数据库连接均已清理。失败时保持 admission 关闭，核对错误与安装身份。
+回滚使用先前验证过且与当前 schema 兼容的 DSH 插件安装、应用和 lockfile 组合；不自动恢复退役引擎。
+不得删除数据库、产物、secret 或浏览器数据来修复发布。
 
-发布和缩容必须遵循：停止 admission → Worker 停止接收新 run → 在配置窗口内完成/取消 → 关闭 SSE/HTTP
-→ 关闭插件进程、socket 和数据库连接。Worker 的 `GGB_V3_WORKER_DRAIN_MS` 默认 15000 毫秒；
-超时会非零退出，未清理 run 由持久状态和 janitor 处理。缩容时需等待该窗口，并检查 plugin-core
-活跃 run。
+## 11. 本地源码安装身份核对
 
-建议的镜像更新顺序：
+本地开发可运行 `sh tools/deploy-ggb-dsh.sh --bundle --build-only` 准备源码覆盖安装，或按授权范围启动调试。
+`--doctor` 以及缺少固定 runtime 时的自动供应会启动真实浏览器，须满足项目的真实运行授权边界。
+本地启动器可能释放 8081/5173 的既有监听；`--build-only` 跳过端口清理，不启动业务服务。
 
-1. 记录当前 image digest、`pnpm-lock.yaml`、plugin-core lock 与数据库 migration revision。
-2. 备份数据库；执行并核对一次性 migration。
-3. 构建并验证新 image；在预发执行健康、静态资源、fake integration 和 channel 测试。
-4. 将旧容器 drain 后替换为新 image；等待 `/health/ready` 成功，再切换或 reload Edge。
-5. 观察 admission、plugin-core、SSE 与 artifact 指标；确认后才清理旧 image。
-
-若新镜像失败，先停止 admission。数据库不自动逆迁移；恢复备份须按单独授权的恢复方案执行。
-不要删除 PostgreSQL、artifact、secret 或浏览器本地数据来“修复”发布。
-
-回滚代码可使用标签 `archive/native-nine-stage-pre-plugin-core`；该标签是删除前 Native 代码的
-完整快照。当前数据库已包含 plugin_core_* 表；旧镜像若要求 Native schema，需先确认旧表仍在
-（本次删除没有删除它们），并按旧镜像的迁移要求单独核对。不得删除任何旧表或旧行。
-
-## 11. 禁止事项
-
-- 部署只使用 `ggb-dsh/deploy/` 和本文规定的入口。
-- 不提交或同步 `.env`、secret 文件、数据库、artifact、scratch、日志、浏览器 Session 或用户数据。
-- 不让 Edge、APM、WAF、debug proxy 或容器命令行记录 `X-GGB-Provider-Key`、Authorization 或 runToken。
-- 不把 SQLite、Memory store、临时 Vite server 或本地测试 secret 用作生产方案。
-- 不在未授权情况下对真实 Provider、真实 GeoGebra 或生产数据库进行 smoke、迁移、回滚或清理操作。
-
-
-### 开发插件加载身份核对
-
-重新运行 `sh tools/deploy-ggb-dsh.sh --doctor`，让启动器构建并加载当前插件源码副本。
-开发启动器先释放 8081/5173，再创建新的隔离安装目录。执行前应确认没有需要保留的活动任务。
-本操作只启动本机开发服务；不发布 vendor 包，不调用 Provider。
-
-核对该次输出目录中的 `installation.json` 与 `worker.log`：
+核对本次输出中的 `installation.json` 与 Worker 启动日志：
 
 | 字段 | 一致条件 |
 | --- | --- |
-| `developmentPayloadSha256` | 等于 Worker 启动日志中的 `packageIntegrity` |
-| `workerSkillSha256` | 等于 Worker 启动日志中的同名值，并与源码生成的 capabilities 一致 |
+| `developmentPayloadSha256` | 等于 Worker 的 `packageIntegrity` |
+| `workerSkillSha256` | 与 Worker 启动日志及安装 capabilities 一致 |
 
-再确认 `/api/v3/health/ready` 返回就绪。Git 提交、旧 ready.json 或安装目录存在都不能
-证明正在运行的 Worker 已更新。Doctor 和就绪检查不等于真实模型任务验收。
+旧 ready.json、安装目录存在或 Git 提交均不能证明正在运行的 Worker 已更新。

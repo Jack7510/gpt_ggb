@@ -27,7 +27,7 @@ Agent 的修改、验证与安全工作规则见 [AGENTS.md](../AGENTS.md)。
 ## 快速开始（本机双进程）
 
 首次安装、供应 runtime 和双终端启动步骤见 [根 README 本地运行](../README.md#本地运行)。
-本节中的命令在 `ggb-dsh/` 运行；下方检查计时与容器构建命令会单独标明仓库根目录。
+本节中的命令在 `ggb-dsh/` 运行；下方检查计时与部署命令会单独标明仓库根目录。
 
 - 单独生成完整构建产物：`pnpm run build`。
 - `dev.sh` 默认读取 `.plugin-core-runtime/<vendor 锁中 archiveSha256>`。`GGB_PLUGIN_ROOT` 可指定另一安装根，
@@ -157,18 +157,13 @@ Agent 的修改、验证与安全工作规则见 [AGENTS.md](../AGENTS.md)。
 - 真实 Provider 调用必须带 `--authorized` 和进程内 `DEEPSEEK_API_KEY`；Key 不进入日志、产物或 Git。
 - GeoGebra/Playwright 验证需要完整安装的固定发行包、runtime 和受管 Chromium；无需源码 checkout。
 
-## 容器与部署
+## 云主机部署
 
-以下命令在仓库根目录运行：
-
-```bash
-docker build -f ggb-dsh/deploy/container/Dockerfile -t ggb-dsh-server .
-```
-
-镜像内 API/Worker 由 `entrypoint.sh` 启动；secrets 以 0600 文件注入。生产环境使用
-PostgreSQL，并把 `GGB_V3_CLIENT_DIST_DIR` 指向构建后的 PWA。Edge 配置见
-`deploy/edge/nginx.conf`，systemd 单元见 `deploy/systemd/`。发布、迁移、回滚与验收边界见
-[部署指南](../docs/deploy-dsh.md)。
+当前云主机使用 Node + systemd，Worker 加载已安装的 DSH 插件。
+路径沿用仓库启动器 `tools/deploy-ggb-dsh.sh` 的布局；该脚本只供本地源码安装与调试，不能直接启动生产服务。
+生产使用 PostgreSQL 与构建后的 PWA。systemd 安装器从当前 checkout 推导工作区，并渲染运行账号与 Node 路径。
+Edge 配置见 `deploy/edge/nginx.conf`，unit 模板见 `deploy/systemd/`。
+构建、供应、配置、迁移与验收步骤见 [部署指南](../docs/deploy-dsh.md)。
 
 ## 模型配置
 

@@ -10,7 +10,7 @@ test('accepts current workspace checks without maintaining a second phase list',
   for (const workspace of ['ggb-dsh']) {
     const manifest = fileURLToPath(new URL(`../${workspace}/package.json`, import.meta.url))
     const { scripts } = JSON.parse(readFileSync(manifest, 'utf8'))
-    for (const script of ['check', 'check:fast']) {
+    for (const script of ['check', 'check:fast', 'check:deploy']) {
       assert.equal(checkPlan(workspace, script, [], scripts).length, scripts[script].split(' && ').length)
     }
   }

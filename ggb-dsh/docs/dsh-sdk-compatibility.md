@@ -155,7 +155,7 @@ Provider 使用 Messages API，默认根为 `https://api.deepseek.com/anthropic`
 Key 只在 run 期间存在，不写入数据库、日志或 DSH Session。Client 不能覆盖 Provider 地址。
 升级时同时更新 SDK overrides、vendor lock、runtime 配置和消费方；重启本地 API/Worker。
 回退使用上一个完整宿主与插件组合，不在同一个 run 中降级、重放或混用旧协议。
-真实 Provider、GeoGebra、浏览器、镜像及目标数据库操作须另行授权。
+真实 Provider、GeoGebra、浏览器、目标主机及数据库操作须另行授权。
 
 ## SDK 失败诊断与宿主协议适配
 
@@ -289,7 +289,7 @@ Worker 在 SDK 任务前拒绝非 receipt-v1 请求。018 的 SQL 默认 legacy 
 Worker 是插件执行进程组的唯一创建者；旧包装器内的 CLI 不再另建 detached 组。
 POSIX 监督器跟踪进程组和已观察的后代，含另建组的后代；先 TERM，再 KILL，并观察退出。
 流关闭、进程树退出与清理预算分别参与完成判定；只收到父进程 exit 或 cancel ack 不足以释放槽位。
-该监督器适用于可信插件的受控执行树，不替代部署层对 Worker 崩溃的 cgroup/systemd/容器回收。
+该监督器适用于可信插件的受控执行树，不替代部署层对 Worker 崩溃的 systemd/cgroup 回收。
 Windows 未实现 Job Object 所有权，不能获得 cleanupConfirmed=true，不应切换安装链路。
 
 结束顺序为：保存 SDK 事实 → 撤销 capability 并中止工具 → SDK close/reap → 排空在途工具 →
