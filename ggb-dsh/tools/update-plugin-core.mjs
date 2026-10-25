@@ -51,7 +51,7 @@ try {
       compatibility: compatibility.runtimeCompatibility(geogebra.version) } }
   const configurationPath = join(workspace, 'config/runtime-versions.json')
   const configuration = await json(configurationPath)
-  configuration.updatedAt = '2026-10-24'
+  configuration.updatedAt = new Date().toISOString().slice(0, 10)
   configuration.geogebra.compatibility = compatibility.runtimeCompatibility(configuration.geogebra.version)
   Object.assign(configuration.plugin, { archiveSha256: lock.archiveSha256, pluginVersion: lock.pluginVersion,
     geogebra: lock.geogebra })

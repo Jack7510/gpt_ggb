@@ -24,9 +24,9 @@
 | --- | --- |
 | SDK Client / runtime / tools | `0.2.1-rc.2`；Worker、application 和 workspace overrides 一致 |
 | Cordis / group / pi-ai | `4.0.5` / `1.0.5` / `1.3.0`；完整传递依赖由 workspace lock 固定 |
-| 插件 | `ggb-plugins-dsh@0.8.3`；来自本地修改源码的 development-build，尚未发布 |
-| 发行包 SHA-256 | `fa44435dffe07dbe1804b56247bde3dd094dbee8eba69b20417109351a1494b2` |
-| Worker Skill SHA-256 | `af8f64194fc86547c2891dabc92422aecaee4741e769e06fa5595f2be505b5d3` |
+| 插件 | `ggb-plugins-dsh@0.8.4`；来自本地修改源码的 development-build，尚未发布 |
+| 发行包 SHA-256 | `734bc157344e1910766e92736c34cbdc8134b959f36efce7b7c21aa73cd9004d` |
+| Worker Skill SHA-256 | `bdd09ab02b5c851d2594d337ca768f1f087bba7214ff5f6f523a97470db6a5ca` |
 | 工具 / executor / receipt / API↔Worker | 协议 `3` / envelope `3` / schema `2` / channel `8`；桌面 CLI 保持 envelope `1` |
 | 插件 GeoGebra | `5.4.932.1`；归档 SHA-256 见 vendor lock |
 | Playwright | `1.64.1`；执行器选择该包管理的 Chromium，不依赖系统 Chrome |
@@ -65,7 +65,7 @@ sh deploy/local/dev.sh
 ```bash
 node tools/provision-plugin-core.mjs --offline --dependencies-only
 node tools/verify-installed-plugin-sdk.mjs \
-  --plugin-tgz vendor/ggb-plugins-dsh-0.8.3.tgz \
+  --plugin-tgz vendor/ggb-plugins-dsh-0.8.4.tgz \
   --sdk-root apps/worker --output ../output/installed-plugin-d/sdk
 ```
 
@@ -447,7 +447,7 @@ Windows 或 ps 不可用时，Worker 在监听前拒绝启动。
 
 开发包包含 source/ 快照；供应锁固定每个源码与构建输入的摘要和快照总摘要。
 sourceCommit 与 sourceDirty 仍描述本地开发基线，精确代码以归档和快照为准。
-这不是已发布的上游 0.8.3；不得覆盖现有供应目录。本机最终包的完整 runtime/doctor、4 项 mock Harness + 真实 GeoGebra 及 PWA mock 全链已通过。
+这不是已发布的上游 0.8.4；不得覆盖现有供应目录。本机最终包的完整 runtime/doctor、4 项 mock Harness + 真实 GeoGebra 及 PWA mock 全链已通过。
 两轮旧任务的完整 wire 参数本身非法，且与 SDK 最终参数完全一致；历史原始字节离线回放仍按原样拒绝。
 当前包使用完整 `{request: {...}}` 工具示例、带类型的枚举 schema 和宿主 reasoning high。
 适配器将四工具 schema 原样传给 Messages input_schema；没有添加未经该接口支持的 strict 参数。

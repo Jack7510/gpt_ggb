@@ -1,6 +1,6 @@
 # 固定插件发行包
 
-`ggb-plugins-dsh-0.8.3.tgz` 由插件仓库的 `node scripts/package-plugin.mjs --target=dsh <output>` 生成。
+`ggb-plugins-dsh-0.8.4.tgz` 由插件仓库的 `node scripts/package-plugin.mjs --target=dsh <output>` 生成。
 本包是尚未发布的本地 development-build，来源提交及 dirty 标记记录在 `plugin-core.lock.json`。
 不能仅凭版本号认定它与上游同名版本一致。
 
@@ -17,5 +17,5 @@ source/dependencies.lock 是原始 pnpm-lock.yaml，重建源码前需恢复文�
 在本目录验证归档：
 
 ```bash
-shasum -a 256 -c ggb-plugins-dsh-0.8.3.tgz.sha256
+shasum -a 256 -c ggb-plugins-dsh-0.8.4.tgz.sha256
 ```

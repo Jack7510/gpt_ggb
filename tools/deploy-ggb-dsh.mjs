@@ -25,9 +25,10 @@ export function options(args, env = process.env) {
     else if (arg === '--install') result.install = true
     else if (arg === '--doctor') result.doctor = true
     else if (arg === '--build-only') result.buildOnly = true
-    else if (['--plugin', '--pinned-root'].includes(arg)) {
+    else if (['--plugin', '--pinned-root', '--runtime-archive'].includes(arg)) {
       if (!args[i + 1] || args[i + 1].startsWith('--')) throw new Error(`Missing value: ${arg}`)
-      result[arg === '--plugin' ? 'plugin' : 'pinnedRoot'] = resolve(args[++i])
+      const key = arg === '--plugin' ? 'plugin' : arg === '--pinned-root' ? 'pinnedRoot' : 'runtimeArchive'
+      result[key] = resolve(args[++i])
     } else throw new Error(`Unknown option: ${arg}`)
   }
   return result
@@ -40,7 +41,8 @@ async function loadPinnedPlugin(root, workspace) {
 }
 
 /** Reuse only a verified installation with a successful provisioning doctor. */
-export async function ensurePinnedInstallation(workspace, root, stage, loadPlugin = loadPinnedPlugin) {
+export async function ensurePinnedInstallation(workspace, root, stage,
+  loadPlugin = loadPinnedPlugin, runtimeArchive) {
   const lockPath = join(workspace, 'vendor/plugin-core.lock.json')
   const original = await readFile(lockPath)
   const lock = JSON.parse(original)
@@ -90,7 +92,8 @@ export async function ensurePinnedInstallation(workspace, root, stage, loadPlugi
       console.log(`[deploy] preserved incomplete installation: ${backup}`)
     }
     await stage('04a-provision-plugin-core', workspace, process.execPath,
-      ['tools/provision-plugin-core.mjs', '--target', root])
+      ['tools/provision-plugin-core.mjs', '--target', root,
+        ...(runtimeArchive ? ['--runtime-archive', runtimeArchive] : [])])
     await unchanged()
     if (!await complete()) throw new Error('Plugin provisioning did not produce a complete installation with doctor passed.')
     return 'provisioned'
@@ -115,7 +118,8 @@ export async function prepareOverlay(workspace, source, pinnedRoot, output) {
     || JSON.stringify(pkg.dependencies) !== JSON.stringify(pinnedPackage.dependencies)
     || JSON.stringify(await json(join(source, 'runtime.lock.json')))
       !== JSON.stringify(await json(join(pinnedRoot, 'runtime.lock.json')))) {
-    throw new Error('Plugin dependencies/version/runtime changed; supply a new pinned release first.')
+    throw new Error('Plugin dependencies/version/runtime changed; supply a new pinned release first: '
+      + 'node tools/update-plugin-core.mjs --tgz <new.tgz> --source <plugin-checkout>')
   }
   const root = join(output, 'plugin')
   await cp(pinnedRoot, root, { recursive: true })
@@ -296,6 +300,7 @@ Local development only. No release publishing, production deployment or model ta
   --doctor         Also run plugin doctor (launches real local GeoGebra/browser)
   --plugin PATH    Plugin source (default: $REPO/ggb-plugins)
   --pinned-root PATH  Complete installation matching the current vendor lock
+  --runtime-archive PATH  Verified GeoGebra ZIP for provisioning without download
   --help           Show this help
 REPO defaults to the script's repository. Default UI: http://localhost:5173
 Requires Node/pnpm/lsof, installed dependencies and the Client GeoGebra runtime.
@@ -369,7 +374,7 @@ Enter Provider Key only in page Settings. This script never reads .env or starts
     }
     await stage('03-build-plugin', source, 'pnpm', ['build'])
     await stage('04-build-backend', workspace, 'pnpm', ['exec', 'tsc', '-b', 'apps/api', 'apps/worker'])
-    await ensurePinnedInstallation(workspace, pinned, stage)
+    await ensurePinnedInstallation(workspace, pinned, stage, loadPinnedPlugin, config.runtimeArchive)
     const overlay = await prepareOverlay(workspace, source, pinned, output)
     await stage('04b-provision-client-compatibility', workspace, process.execPath,
       ['tools/provision-geogebra.mjs', '--plugin-root', overlay.root])

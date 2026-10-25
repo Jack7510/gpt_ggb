@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-24",
+  "updatedAt": "2026-10-25",
   "node": {
     "supportedRange": "^22.19.0 || >=24.0.0",
     "role": "API/Worker and DSH runtime",
@@ -29,8 +29,8 @@
     }
   },
   "plugin": {
-    "pluginVersion": "0.8.3",
-    "archiveSha256": "fa44435dffe07dbe1804b56247bde3dd094dbee8eba69b20417109351a1494b2",
+    "pluginVersion": "0.8.4",
+    "archiveSha256": "734bc157344e1910766e92736c34cbdc8134b959f36efce7b7c21aa73cd9004d",
     "playwright": "1.64.1",
     "geogebra": {
       "version": "5.4.932.1",
