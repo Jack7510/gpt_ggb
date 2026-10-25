@@ -164,6 +164,8 @@ export class PluginCoreDshRunner {
       if (process.env[name] !== undefined) env[name] = process.env[name]
     }
     Object.assign(env, {
+      // TMPDIR may be mounted noexec; load native addons from the installed release.
+      NARB_DISABLE_NATIVE_CACHE: '1',
       NODE_OPTIONS: '--import=' + new URL('../../lib/plugin-core/provider-stream-preload.js', import.meta.url).href,
       GGB_DSH_TOOL_STREAM_EVIDENCE: streamEvidencePath,
       DEEPSEEK_API_KEY: request.providerKey,

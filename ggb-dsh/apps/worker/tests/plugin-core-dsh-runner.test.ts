@@ -21,6 +21,7 @@ const digest = 'd'.repeat(64)
 const dirs: string[] = []
 
 afterEach(async () => {
+  vi.unstubAllEnvs()
   for (const dir of dirs) await rm(dir, { recursive: true, force: true })
   dirs.length = 0
 })
@@ -41,6 +42,26 @@ function send(socketPath: string, body: unknown): Promise<string> {
 }
 
 describe('plugin-core DSH runner', () => {
+  it('disables native addon caching in the DSH child even when the host enables it', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'sdk-native-cache-')); dirs.push(dir)
+    vi.stubEnv('TMPDIR', '/run/ggb-dsh/tmp')
+    vi.stubEnv('NARB_DISABLE_NATIVE_CACHE', '0')
+    vi.stubEnv('NARB_NATIVE_CACHE_DIR', '/run/ggb-dsh/native-cache')
+    const createHarness = vi.fn((options: DeepSeekHarnessOptions) => {
+      expect(options.env).toMatchObject({ TMPDIR: '/run/ggb-dsh/tmp', NARB_DISABLE_NATIVE_CACHE: '1' })
+      expect(options.env).not.toHaveProperty('NARB_NATIVE_CACHE_DIR')
+      return { run: async () => ({ finalResponse: '', events: [] }) as unknown as RunResult,
+        close: async () => undefined }
+    })
+    const subject = new PluginCoreDshRunner({ workspaceRoot: dir, dshHomeRoot: join(dir, 'homes'),
+      provider: 'deepseek', baseUrl: 'http://127.0.0.1:1', modelId: 'offline', reasoningEffort: 'off',
+      maxTokens: 512, serverPatch, sdkVersion: '0.2.1-rc.2', createHarness,
+    }, { openTurn: () => 'token', closeTurn: () => {}, drainTurn: async () => {},
+      socketPath: join(dir, 'unused.sock') } as never)
+    await subject.run({ runId, turnId, epoch: 1, providerKey: 'fake', prompt: 'offline', baseAttached: false })
+    expect(createHarness).toHaveBeenCalledOnce()
+  })
+
   it.each([false, true])('publishes only live SDK notifications, never returned history, and closes observation (live=%s)', async live => {
     const dir = await mkdtemp(join(tmpdir(), 'sdk-progress-wiring-')); dirs.push(dir)
     const state = new PluginCoreExecutionState(dir)
