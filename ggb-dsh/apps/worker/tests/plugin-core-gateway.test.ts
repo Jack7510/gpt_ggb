@@ -4,6 +4,7 @@ import { runIdSchema } from '@ggb-copilot/application'
 import { PluginCoreBaseRegistry } from '../src/plugin-core/base-registry.js'
 import { PluginCoreGateway } from '../src/plugin-core/gateway.js'
 import type { PluginCoreRunResult } from '../src/plugin-core/process-runner.js'
+import { evidenceError } from '../src/plugin-core/evidence.js'
 
 const runId = runIdSchema.parse('run_00000000-0000-4000-8000-000000000001')
 const digest = 'a'.repeat(64)
@@ -20,6 +21,35 @@ function gateway() {
 }
 
 describe('plugin-core gateway', () => {
+  it.each([
+    { offset: 14, line: 3, column: 2 },
+    { offset: -1, line: 1, column: 1 },
+    { offset: 1, line: 0, column: 1 },
+    { offset: 1, line: 1, column: 3 },
+    { offset: '14', line: 3, column: 2 },
+    { offset: Infinity, line: 1, column: 1 },
+  ])('projects only valid numeric draft error coordinates: %j', async location => {
+    const { gateway: subject, runner } = gateway()
+    const error = Object.assign(new Error('requestText is not valid JSON'), {
+      name: 'DraftError', code: 'draft_request_json',
+      details: { ...location, source: 'private input', path: '/Users/private', token: 'private-token' },
+    })
+    const draftSession = { operate: vi.fn(() => { throw error }), forCheck: vi.fn(),
+      acceptCheck: vi.fn(), forBuild: vi.fn() }
+    const result = await subject.dispatch({ toolName: 'ggb_request', runId,
+      turnId: 'turn', epoch: 1, arguments: { requestText: '{' }, draftSession })
+    const expected = location.offset === 14 ? location : undefined
+    expect(result).toMatchObject({ status: 'rejected',
+      errors: [{ code: 'draft_request_json', message: error.message }],
+      buildBudget: { used: 0, limit: 3, remaining: 3 } })
+    expect(result.errors[0]?.details).toEqual(expected)
+    const recorded = evidenceError(error) as { details?: unknown }
+    expect(recorded.details).toEqual(expected)
+    expect(JSON.stringify(result)).not.toContain('private')
+    expect(runner.check).not.toHaveBeenCalled()
+    expect(runner.build).not.toHaveBeenCalled()
+  })
+
   it('projects a successful check without server paths', async () => {
     const { gateway: subject, runner } = gateway()
     const result = await subject.dispatch({ toolName: 'ggb_check', runId, turnId: 'turn', epoch: 1,

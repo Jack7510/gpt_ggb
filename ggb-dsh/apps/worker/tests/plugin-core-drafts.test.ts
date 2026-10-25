@@ -159,7 +159,7 @@ it('keeps image transcription in small blocks and validates source against the a
 it('keeps a recoverable draft error code separate from its human message', async () => {
   const f = await fixture()
   expect(await f.call('ggb_request', { requestText: '{' })).toMatchObject({
-    status: 'rejected', errors: [{ code: 'draft_request_json', message: 'requestText is not valid JSON' }],
+    status: 'rejected', errors: [{ code: 'draft_request_json', message: expect.stringContaining('requestText is not valid JSON') }],
     buildBudget: { used: 0, limit: 3, remaining: 3 },
   })
   await f.save()

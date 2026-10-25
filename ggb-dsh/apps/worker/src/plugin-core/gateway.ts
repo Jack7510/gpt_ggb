@@ -5,7 +5,7 @@ import { summarizeBuildFailure } from './build-failure-summary.js'
 import type { PluginCoreExecutionState } from './execution-state.js'
 import { randomUUID } from 'node:crypto'
 import { runIdSchema, toolArgumentsDigest, type RunId } from '@ggb-copilot/application'
-import { redactEvidence, type PluginCoreEvidenceStore, type ToolCallEvidence } from './evidence.js'
+import { draftErrorLocation, redactEvidence, type PluginCoreEvidenceStore, type ToolCallEvidence } from './evidence.js'
 import type { PluginCoreBaseRegistry } from './base-registry.js'
 import type { PluginCoreRunResult } from './process-runner.js'
 
@@ -128,7 +128,8 @@ export class PluginCoreGateway {
         this.options.state?.reportProgress(request.runId, { tool: request.toolName, status: 'rejected', callId })
         await call?.failed(error)
         const code = 'code' in error && typeof error.code === 'string' ? error.code : 'invalid_input'
-        return this.withBudget(request.runId, this.rejected(request.toolName, code, error.message))
+        return this.withBudget(request.runId, this.rejected(request.toolName, code, error.message,
+          draftErrorLocation(error)))
       }
       this.options.state?.reportProgress(request.runId, { tool: request.toolName, status: 'failed', callId })
       if (error instanceof Error && error.message === 'plugin_core_cleanup_failed') {

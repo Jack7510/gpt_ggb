@@ -15,6 +15,17 @@ export function evidenceRecord(value: unknown): RecordValue {
     ? value as RecordValue : {}
 }
 
+/** Keep only numeric JSON coordinates from the plugin's recoverable draft error. */
+export function draftErrorLocation(error: unknown): { offset: number; line: number; column: number } | undefined {
+  const value = evidenceRecord(error)
+  if (value.name !== 'DraftError' || value.code !== 'draft_request_json') return undefined
+  const { offset, line, column } = evidenceRecord(value.details)
+  if (typeof offset !== 'number' || !Number.isSafeInteger(offset) || offset < 0
+    || typeof line !== 'number' || !Number.isSafeInteger(line) || line < 1 || line > offset + 1
+    || typeof column !== 'number' || !Number.isSafeInteger(column) || column < 1 || column > offset + 1) return undefined
+  return { offset, line, column }
+}
+
 /** One redaction owner for diagnostics and the smaller model projection. */
 export function redactEvidence(value: unknown, secrets: readonly string[] = [],
   model = false, depth = 0): unknown {
@@ -58,6 +69,8 @@ export function evidenceError(error: unknown, secrets: readonly string[] = [], d
   for (const key of ['code', 'exitCode', 'signal', 'stderr', 'stderrTail']) {
     if (['string', 'number'].includes(typeof value[key]) || value[key] === null) result[key] = value[key]
   }
+  const location = draftErrorLocation(error)
+  if (location !== undefined) result.details = location
   if (error instanceof Error) result.stack = error.stack?.split('\n')
     .filter(line => /^\s*at /u.test(line)).slice(0, 8).join('\n') ?? null
   // The pinned SDK exposes these facts in TransportClosedError's public message.
