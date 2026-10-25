@@ -80,6 +80,10 @@ test('systemd config uses workspace-relative assets and the locked installed DSH
       Number(values.GGB_V3_MAX_BODY_BYTES))
     assert.match(nginx, /proxy_next_upstream off;/)
     assert.match(nginx, /proxy_buffering off;/)
+    assert.match(nginx, /gzip on;/)
+    assert.match(nginx, /gzip_proxied any;/)
+    assert.match(nginx, /gzip_types [^;]*text\/javascript/)
+    assert.doesNotMatch(nginx, /gzip_types[^;]*text\/event-stream/)
   }
 })
 

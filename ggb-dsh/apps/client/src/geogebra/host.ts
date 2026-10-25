@@ -111,7 +111,15 @@ export interface IframeAppletPortOptions {
   url?: string
   /** Extra origin check for postMessage; defaults to the current origin. */
   origin?: string
+  /** Per-operation timeout after the applet answers once; defaults to 30 seconds. */
   timeoutMs?: number
+  /**
+   * Timeout for the first answered operation. Every operation waits for the
+   * dedicated document to download and initialize the GeoGebra runtime, so a
+   * slow link needs a much larger budget than a later operation; defaults to
+   * 120 seconds.
+   */
+  readyTimeoutMs?: number
 }
 
 /**
@@ -125,11 +133,13 @@ export function createIframeAppletPort(options: IframeAppletPortOptions = {}): {
 } {
   const origin = options.origin ?? globalThis.location.origin
   const timeoutMs = options.timeoutMs ?? 30_000
+  const readyTimeoutMs = options.readyTimeoutMs ?? 120_000
   const element = document.createElement('iframe')
   element.title = 'GeoGebra'
   element.setAttribute('allow', 'clipboard-write')
   let nextId = 1
   let disposed = false
+  let appletReady = false
   let resolveChildReady: (() => void) | null = null
   const childReady = new Promise<void>((resolve) => { resolveChildReady = resolve })
   // `src` may begin loading while the iframe is detached. In that case the
@@ -166,16 +176,17 @@ export function createIframeAppletPort(options: IframeAppletPortOptions = {}): {
   }
   globalThis.addEventListener('message', onMessage)
 
-  const call = <T>(op: AppletOperation, payload?: unknown): Promise<T> => {
+  const call = <T>(op: AppletOperation, payload?: unknown, timeout = appletReady ? timeoutMs : readyTimeoutMs): Promise<T> => {
     if (disposed) return Promise.reject(new Error('applet_port_disposed'))
     const id = nextId++
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
         pending.delete(id)
         reject(new Error('applet_request_timeout'))
-      }, timeoutMs)
+      }, timeout)
       pending.set(id, {
         resolve: (value) => {
+          appletReady = true
           clearTimeout(timer)
           resolve(value as T)
         },

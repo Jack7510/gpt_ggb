@@ -187,6 +187,9 @@ Worker 的强制停机窗口为 150 秒，API 为 45 秒；自定义应用 drain
 
 - `/api/` 禁用 buffering、cache 与上游重试，SSE 读取超时为 1 小时。
 - Nginx 请求体上限为 40 MiB，与 `GGB_V3_MAX_BODY_BYTES=41943040` 一致。
+- Edge 对 JavaScript、CSS、JSON、SVG 与 WASM 启用 gzip，且不压缩 SSE。
+  GeoGebra runtime 主包约 7.9 MB；未压缩时经低速隧道首次加载可能超过 30 秒。
+  Client 首次 applet 操作为 120 秒（任一操作都要等 runtime 初始化），此后的 applet RPC 为 30 秒。
 - 透传 Authorization；日志、WAF、APM 不得记录 Key、runToken、题目或请求体。
 - CSP 由 API 根据 PWA shell 与 GeoGebra document 分别下发，Edge 不追加 CSP 或跨域头。
 - 未知 API 路径不得改写成静态 PWA fallback，公网防火墙不得直接开放 API 端口。
@@ -203,6 +206,7 @@ curl -fsS -H 'Host: <public-host>' http://127.0.0.1:8080/api/v3/health/ready
 curl -fsS -H 'Host: <public-host>' http://127.0.0.1:8080/api/v3/bootstrap
 curl -fsSI https://<public-host>/
 curl -fsSI https://<public-host>/geogebra/deployggb.js
+curl -fsS -o /dev/null -D - -H 'Accept-Encoding: gzip' https://<public-host>/geogebra/deployggb.js | grep -i '^content-encoding: gzip'
 ```
 
 再核对静态资源 manifest、CSP、API/SSE 的 no-store、未知 API 的 JSON 404，以及数据库迁移状态。
