@@ -1,6 +1,6 @@
-# GGB Copilot
+# GGB Agent
 
-GGB Copilot 是一个以 GeoGebra 为画布的数学构图 Agent 项目。用户在浏览器中输入构图任务，
+**GGB Agent** 是一个以 GeoGebra 为画布的数学构图 Agent 项目。用户在浏览器中输入构图任务，
 Server 调用模型和插件完成构造、核验，并交付可交互的 `.ggb` 文件。交付结果可以导入画布、
 下载到本地，也可以作为下一轮任务的基线。
 
