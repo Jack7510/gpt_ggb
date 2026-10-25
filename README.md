@@ -61,7 +61,7 @@ Plugin-core Server
 | `tools/check-workspace.mjs` | 从仓库根目录调用工作区检查并记录耗时。 |
 | `AGENTS.md` | Coding Agent 的工作契约；不另维护项目结构、技术栈或架构说明。 |
 
-`ggb-plugins` 是独立插件依赖。开发默认链路从固定 TGZ 安装，不依赖源码 checkout 或桌面插件缓存。
+`ggb-plugins` 是独立插件依赖。常规运行使用固定 TGZ；本地源码启动器 `tools/deploy-ggb-dsh.sh` 则直接使用源码构建、依赖和 runtime，不读取已安装插件。
 宿主只通过公开入口加载四工具、Worker Skill 和执行器；新 run 固定使用可信回执交付。
 `application` 通过 `./browser` 导出浏览器可用契约；Client 不导入服务端入口。
 `run-persistence` 只供 API/Worker 使用。内部依赖使用 `workspace:*` 和包公开导出，

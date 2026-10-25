@@ -16,7 +16,7 @@
 
 1. Node.js 和 pnpm 满足 [`runtime-versions.json`](../ggb-dsh/config/runtime-versions.json) 的范围。
 2. `ggb-plugins` 和 `ggb-dsh` 已安装依赖。
-3. 使用下文一键启动器时，缺少的插件 runtime 会自动供应。使用分步命令时，先执行 `pnpm run provision:plugin-core`。
+3. 使用下文源码启动器时，缺少或版本不匹配的源码 runtime 会自动准备。
 4. 8081 端口空闲。Vite 代理固定指向 `http://127.0.0.1:8081`。
 5. 5173 端口空闲；如果 Vite 使用其他端口，后续必须同步 `GGB_V3_ALLOWED_ORIGIN`。
 6. DeepSeek API Key 只在页面 Settings 中输入。不要把 Key 写入 shell、文档或 Git。
@@ -25,8 +25,8 @@
 
 | 要素 | 位置 | 状态 | 依据 |
 | --- | --- | --- | --- |
-| 架构图 | 3.1 | 已提供 | `tools/manual-verify-plugin.sh` 与 Worker 安装校验实现 |
-| 流程图 | 3.2 | 已提供 | 启动器的覆盖、锁恢复和健康检查步骤 |
+| 架构图 | 3.1 | 已提供 | `tools/deploy-ggb-dsh.mjs` 与 Worker 安装校验实现 |
+| 流程图 | 3.2 | 已提供 | 启动器的源码快照、私有开发锁和健康检查步骤 |
 | 状态机 | — | 不适用 | 本文描述一次性手工流程，没有持久状态迁移；Worker 运行状态由 `PluginCoreExecutionState` 维护 |
 | 契约 | 5、6、7 | 已提供 | 启动器、环境变量、端口、锁文件与健康检查 |
 
@@ -37,40 +37,35 @@
 ```mermaid
 flowchart LR
   A[ggb-plugins 源码] -->|pnpm build| B[dist / dsh / skills]
-  B -->|覆盖| C[.tmp/plugin-manual]
-  D[.plugin-core-runtime 固定副本] -->|复制| C
+  B -->|复制| C[本次 output/run/plugin]
+  D[源码 node_modules 与 .runtime] -->|链接与资源检查| C
   C -->|GGB_PLUGIN_ROOT| E[Worker]
+  I[本次 workspace/vendor 私有开发锁] -->|完整性与兼容性| E
   E <-->|Unix socket| F[API 8081]
   G[Vite 5173] -->|/api/v3 代理| F
-  H[Chrome] --> G
-  I[vendor/plugin-core.lock.json] -.临时匹配.-> E
+  H[浏览器] --> G
 ```
 
-说明：
-
-- 启动器复制固定安装副本，再覆盖当前 `dist/`、`dsh/`、`skills/` 和 `capabilities.json`。
-- Worker 从 `GGB_PLUGIN_ROOT` 读取测试安装根。
-- 启动器临时改写 `vendor/plugin-core.lock.json`，使 Worker 的包文件摘要校验通过。
-- Worker 就绪后，启动器立即恢复原锁文件。
-- API 与 Worker 通过本地 Unix socket 通信。
-- Vite 是开发页面的信任边界；浏览器只访问 5173，API 代理去掉浏览器 Origin。
-- 测试安装根和运行产物只写入 Git 忽略目录。
+- 当前源码资产复制到每次独立目录，依赖与 runtime 来自源码目录。
+- Worker 读取本次开发锁；仓库 vendor 包、发行锁和已安装插件不参与这条开发启动链路。
+- SDK/协议兼容性、文件完整性和资源身份检查仍由现有宿主 loader 执行。
+- API 与 Worker 使用本地 Unix socket；浏览器通过 Vite 访问开发页面。
+- 开发目录、日志和运行产物写入 Git 忽略目录，停止时无需恢复发行文件。
 
 ### 3.2 操作流程
 
 ```mermaid
 flowchart TD
-  A[构建插件] --> B{固定安装根存在?}
-  B -- 否 --> B1[provision:plugin-core]
-  B -- 是 --> C[复制固定安装根并覆盖插件文件]
-  C --> D[备份并改写 release lock]
-  D --> E[启动 API 与 Worker]
-  E --> F{健康检查通过?}
-  F -- 否 --> X[停止进程并恢复 release lock]
-  F -- 是 --> G[恢复 release lock]
-  G --> H[启动 Vite]
-  H --> I[在页面提交构图任务]
-  I --> J[检查交付 GGB 与页面结果]
+  A[构建源码和后端] --> B{源码 runtime 身份匹配?}
+  B -->|否| C[源码 setup-runtime 准备资源]
+  B -->|是| D[复制源码资产并生成私有开发锁]
+  C --> D
+  D --> E[完整性 SDK 与资源检查]
+  E --> F[准备 Client runtime 并构建前端]
+  F --> G[启动 API Worker 和 Vite]
+  G --> H{健康检查通过?}
+  H -->|是| I[页面手工验证]
+  H -->|否| X[停止本次进程并保留日志]
 ```
 
 ## 4. 命令
@@ -92,19 +87,20 @@ sh tools/deploy-ggb-dsh.sh --build-only   # 只构建和校验独立安装，不
 ```
 
 首次安装依赖时加 `--install`。`--doctor` 会额外启动本机 GeoGebra/浏览器，须按任务授权使用。
-脚本检查当前 vendor 锁对应的固定安装：供应标记必须记录 doctor 通过，包摘要、兼容组合和 runtime 资源检查必须通过。
-完整安装直接复用。缺少安装、供应标记、runtime 资源或 doctor 成功记录时，脚本调用现有供应器自动安装依赖、Chromium 和 GeoGebra runtime，并运行 doctor；该步骤可能下载资源、启动本机浏览器。
-自动供应同样适用于 `--build-only`。`--doctor` 额外核验源码覆盖后的安装。
-不完整目录会先保留为同级 `.incomplete-<随机值>` 目录，再供应原目标；脚本不删除备份。
-包摘要或安装身份不匹配时停止，不覆盖现有安装。供应或 doctor 失败时停止，不启动服务；分阶段日志保留在下述日志目录。
-并发供应由同级 `.provisioning` 目录互斥；强制结束后，确认没有供应进程再手工移除该目录并重试。
-Client GeoGebra runtime 仍需预先供应；缺失时提示执行 `pnpm run provision:geogebra`。
-构建 Client 前，启动器使用源码覆盖安装的公开 `runtime-compatibility` 入口准备 Client runtime。
+此脚本只用于开发环境，以当前 `ggb-plugins` 源码为准，不读取或复用 vendor TGZ、
+固定插件安装根或 Codex/DSH 已安装插件。每次构建后，把源码资产复制到本次输出目录，
+使用源码目录的 `node_modules` 和 `.runtime`，生成本次独立 workspace 与开发锁。
+源码版本变化无需先更新正式插件包。缺少或版本不匹配的源码 runtime 通过源码 setup-runtime 脚本准备；
+可用 `--runtime-archive PATH` 指定本机 GeoGebra ZIP。`--install` 安装源码和宿主依赖，
+`--doctor` 额外运行开发目录 smoke 检查；SDK/协议兼容性、资源身份与宿主完整性检查仍然有效。
+失败时不启动服务，不退回旧插件，也不改写 vendor 发行文件。
+Client GeoGebra runtime 也由源码公开入口准备；缺少资源时使用指定的 `--runtime-archive` 或下载固定归档。
+构建 Client 前，启动器使用源码开发目录的公开 `runtime-compatibility` 入口准备 Client runtime。
 `04b-provision-client-compatibility.log` 记录该步骤。供应器检查原始或已修复文件的摘要；不匹配时停止。
 该步骤为两个固定版本补齐 Directrix 路径起点初始化，保留 `Point(d)` 和几何依赖。
 已供应的 Client runtime 可以原地复用；manifest 记录兼容补丁身份和修复后文件摘要。
-独立运行供应器时，先供应包含此公开入口的新插件，再运行 `provision:geogebra`。
-源码包尚未更新到 vendor 时，可传 `--plugin-root /absolute/development/installation`；旧安装不伪装成已修复安装。
+独立运行 Client 供应器时，传 `--plugin-root /absolute/development/installation` 使用本次源码目录，
+不要求更新 vendor；不传该参数的正式供应路径仍校验固定发行包。
 PWA 的 runtime 缓存升为 `ggb-runtime-v2`。新 Service Worker 激活时删除旧代缓存；
 新代首次下载绕过旧 HTTP 缓存，随后复用修复后的资源。已加载的旧 applet 需在刷新页面后重新创建。
 启动模式会在构建前清理所需端口的 TCP 监听进程：默认清理 8081 和 5173，`--bundle` 只清理 8081。
@@ -112,11 +108,11 @@ PWA 的 runtime 缓存升为 `ggb-runtime-v2`。新 Service Worker 激活时删�
 清理期间若出现新的监听 PID，脚本退出，不继续终止新进程。`--build-only` 不执行端口清理。
 清理日志保存在本次输出目录的 `00-release-ports.log`；构建完成后会再次检查端口。
 
-`REPO` 可覆盖仓库根；`--plugin PATH` 和 `--pinned-root PATH` 可覆盖插件源码及固定安装根。
+`REPO` 可覆盖仓库根；`--plugin PATH` 可覆盖源码目录；不再支持固定安装根 `--pinned-root`。
 
 此入口使用独立开发安装和独立 workspace 中的派生锁，通过宿主现有完整性和兼容性校验。
-它不改写仓库 vendor 锁，不需要恢复锁文件；下面 4.1–4.7 保留旧手工分步入口的操作说明。
-依赖、插件版本或 runtime 身份改变时，脚本拒绝复用旧安装，须先按正式供应流程准备匹配组合。
+它不改写仓库 vendor 锁，不需要恢复锁文件。
+源码、依赖与 runtime 身份由本次开发锁记录；生产固定发行包仍按正式供应流程维护。
 
 默认同时启动 API/Worker 和 Vite，打开 `http://localhost:5173`。bundle 模式打开 `http://127.0.0.1:8081`。
 端口固定为 8081/5173；启动前按上述规则终止占用所需端口的监听进程。`Ctrl-C` 停止脚本所属进程。
@@ -126,129 +122,18 @@ PWA 的 runtime 缓存升为 `ggb-runtime-v2`。新 Service Worker 激活时删�
 本机 SQLite、稳定 pepper 和构图诊断保存在 `ggb-dsh/.local/deploy/`；不要提交或公开这些数据。
 脚本拒绝 `NODE_ENV=production` 和 PostgreSQL 目标；此入口不是生产部署或 release 发布。
 
-### 4.1 安装依赖
+### 4.1 只检查构建或额外运行 doctor
 
 ```sh
-cd "$REPO/ggb-plugins"
-pnpm install --frozen-lockfile --ignore-scripts
-
-cd "$REPO/ggb-dsh"
-pnpm install --frozen-lockfile --ignore-scripts
+sh tools/deploy-ggb-dsh.sh --build-only
+sh tools/deploy-ggb-dsh.sh --doctor
 ```
 
-### 4.2 构建插件
+第一条只构建并核对开发目录，不启动服务，也不调用模型；若源码 runtime 缺失，仍需准备资源。
+第二条额外运行本机 GeoGebra/browser smoke，再启动开发服务。真实 Provider 验证需另行授权。
+依赖缺失时使用 `--install`；离线准备 runtime 时使用 `--runtime-archive /absolute/runtime.zip`。
 
-```sh
-cd "$REPO/ggb-plugins"
-pnpm build
-```
-
-可选检查：
-
-```sh
-pnpm test
-node dist/src/cli.js doctor
-```
-
-如果要验证正式 TGZ，再执行 `pnpm pack:dsh`。本文的手工验证使用当前 `dist/` 和 `dsh/`，不依赖新 TGZ。
-
-### 4.3 构建后端
-
-```sh
-cd "$REPO/ggb-dsh"
-pnpm exec tsc -b apps/api apps/worker
-```
-
-### 4.4 构建前端
-
-开发模式：
-
-```sh
-cd "$REPO/ggb-dsh"
-pnpm exec tsc -b apps/client
-```
-
-生产 bundle：
-
-```sh
-cd "$REPO/ggb-dsh"
-pnpm --filter @ggb-copilot/client run bundle
-```
-
-产物位于 `apps/client/dist/`。
-
-### 4.5 启动后端（终端 A）
-
-```sh
-cd "$REPO/ggb-dsh"
-sh tools/manual-verify-plugin.sh
-```
-
-等待启动器输出以下两行：
-
-```text
-plugin test root: /Users/.../ggb-dsh/.tmp/plugin-manual
-backend ready on http://127.0.0.1:8081; release lock restored
-```
-
-启动器完成以下动作：
-
-1. 构建当前插件源码。
-2. 复制固定安装副本到 `.tmp/plugin-manual`。
-3. 覆盖当前插件构建产物。
-4. 备份并临时改写 `vendor/plugin-core.lock.json`。
-5. 启动 `deploy/local/dev.sh`。
-6. 健康检查通过后恢复 release lock。
-7. `Ctrl-C` 时停止 API 和 Worker。
-
-启动器固定使用 `GGB_V3_WATCH=0`，避免 Worker 在 release lock 恢复后重启。修改后端源码后，重新执行启动器。
-
-如果 8081 端口被占用，先检查并释放：
-
-```sh
-lsof -nP -iTCP:8081 -sTCP:LISTEN
-```
-
-### 4.6 启动前端（终端 B）
-
-```sh
-cd "$REPO/ggb-dsh"
-pnpm run dev
-```
-
-打开：
-
-```text
-http://localhost:5173
-```
-
-页面操作：
-
-1. 打开 Settings。
-2. 填入 DeepSeek API Key。
-3. 打开 New Session。
-4. 输入构图题目，例如 `画一个正多边形`。
-5. 等待交付卡片出现。
-6. 检查 GGB 预览并下载文件。
-
-### 4.7 单端口构建模式
-
-该模式由 API 提供构建后的前端，不使用 Vite。
-
-```sh
-cd "$REPO/ggb-dsh"
-pnpm run build
-
-GGB_V3_CLIENT_DIST_DIR="$PWD/apps/client/dist" \
-GGB_V3_GEOGEBRA_ROOT="$PWD/apps/client/dist/geogebra" \
-sh tools/manual-verify-plugin.sh
-```
-
-打开：
-
-```text
-http://127.0.0.1:8081
-```
+无需手工复制已安装插件或改写仓库 release lock；源码改变后重新执行同一启动命令即可。
 
 ## 5. 验证清单
 
@@ -279,30 +164,29 @@ curl -fsS http://127.0.0.1:8081/api/v3/health/ready
 
 | 名称 | 本文取值 | 作用 |
 | --- | --- | --- |
-| `GGB_PLUGIN_ROOT` | `ggb-dsh/.tmp/plugin-manual` | Worker 加载的测试插件安装根 |
+| `GGB_PLUGIN_ROOT` | `output/deploy-ggb-dsh/run-*/plugin` | Worker 加载的测试插件安装根 |
 | `PORT` | `8081` | API 监听端口；Vite 代理目标 |
 | `GGB_V3_ALLOWED_ORIGIN` | `http://localhost:5173` | Vite 开发页面的 CORS 允许来源 |
 | `GGB_V3_CLIENT_DIST_DIR` | `apps/client/dist` | 单端口模式下的前端产物目录 |
 | `GGB_V3_GEOGEBRA_ROOT` | `apps/client/dist/geogebra` | 单端口模式下的 GeoGebra runtime 目录 |
-| `vendor/plugin-core.lock.json` | 仓库内文件 | Worker 校验插件文件摘要；启动器临时改写并恢复 |
-| `.tmp/plugin-manual` | Git 忽略目录 | 当前源码的测试安装根 |
+| `GGB_V3_DSH_WORKSPACE_ROOT` | 本次 `workspace/` | Worker 读取其中的私有开发锁，不读取仓库发行锁 |
+| 本次 `workspace/vendor/plugin-core.lock.json` | Git 忽略目录 | 当前源码文件摘要、SDK 与 runtime 身份 |
 | `DEEPSEEK_API_KEY`（页面 Settings） | 浏览器 Vault | 只在页面 Settings 中保存；不写入 shell |
 
 ## 7. 失败处理
 
 | 现象 | 原因 | 处理 |
 | --- | --- | --- |
-| `04a-provision-plugin-core failed` | 自动供应或 doctor 失败 | 检查启动器打印的阶段日志；修复下载、依赖或浏览器问题后重新运行启动器 |
-| `plugin_core_package_integrity_mismatch` | 使用了未匹配的安装根 | 不要直接把 `GGB_PLUGIN_ROOT` 指向源码目录；执行 `tools/manual-verify-plugin.sh` |
-| 启动器被强制终止，锁文件仍被修改 | 进程被强制终止，清理未执行 | 在 `ggb-dsh` 执行 `git checkout -- vendor/plugin-core.lock.json` |
+| `04a-prepare-source-runtime failed` | 源码 runtime 准备失败 | 检查启动器打印的阶段日志；修复下载、依赖或浏览器问题后重新运行启动器 |
+| `plugin_core_package_integrity_mismatch` | 使用了未匹配的安装根 | 不要直接把 `GGB_PLUGIN_ROOT` 指向源码目录；重新执行 `sh tools/deploy-ggb-dsh.sh` |
 | 健康检查超时 | API 或 Worker 启动失败 | 读取启动器输出和 `.local` 日志；检查 8081 端口、插件依赖和 runtime |
 | 页面请求 404 或 CORS 错误 | 后端端口不是 8081，或 Vite 端口改变 | 保持后端在 8081；把 `GGB_V3_ALLOWED_ORIGIN` 设为实际 Vite 地址后重启后端 |
-| 插件改动没有生效 | 只修改源码，没有重新构建 | 先执行 `cd ggb-plugins && pnpm build`，再启动启动器 |
+| 插件改动没有生效 | 只修改源码，没有重新构建 | 重新执行源码启动器，核对输出的源码路径与版本 |
 | 页面无法提交任务 | 未保存 Provider Key | 在 Settings 中保存 Key；不要通过 shell 传入 |
 
 ## 8. 边界
 
 - 本文验证当前源码构建，不验证正式 TGZ。正式发行必须更新 `vendor/plugin-core.lock.json`、vendor 包和 `config/runtime-versions.json`，然后执行 `pnpm run provision:plugin-core`。
-- 启动器只用于本地开发。它临时改写 release lock，不能用于生产或并发验证。
+- 启动器只用于本地开发。它不修改 release lock，不能用于生产部署。
 - 手工验证调用真实 Provider 时会产生费用。执行前必须取得授权。
 - `.tmp/plugin-manual`、`.local` 和 `output/` 中的运行证据不进入 Git。

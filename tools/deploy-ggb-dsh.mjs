@@ -2,8 +2,9 @@
 import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { createHash, randomBytes } from 'node:crypto'
+import { createRequire } from 'node:module'
 import { createServer } from 'node:net'
-import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises'
+import { access, cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { closeSync, openSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -25,150 +26,91 @@ export function options(args, env = process.env) {
     else if (arg === '--install') result.install = true
     else if (arg === '--doctor') result.doctor = true
     else if (arg === '--build-only') result.buildOnly = true
-    else if (['--plugin', '--pinned-root', '--runtime-archive'].includes(arg)) {
+    else if (['--plugin', '--runtime-archive'].includes(arg)) {
       if (!args[i + 1] || args[i + 1].startsWith('--')) throw new Error(`Missing value: ${arg}`)
-      const key = arg === '--plugin' ? 'plugin' : arg === '--pinned-root' ? 'pinnedRoot' : 'runtimeArchive'
+      const key = arg === '--plugin' ? 'plugin' : 'runtimeArchive'
       result[key] = resolve(args[++i])
     } else throw new Error(`Unknown option: ${arg}`)
   }
   return result
 }
 
-async function loadPinnedPlugin(root, workspace) {
+async function sourceHost(workspace) {
+  const host = createRequire(join(workspace, 'apps/worker/package.json'))
+  const sdk = host.resolve('@deepseek-ai/dsh-sdk-client/package.json')
+  const application = await import(pathToFileURL(host.resolve('@ggb-copilot/application')).href)
   const { loadInstalledPlugin } = await import(pathToFileURL(
     join(workspace, 'apps/worker/lib/plugin-core/installation.js')).href)
-  return loadInstalledPlugin(root, join(workspace, 'vendor/plugin-core.lock.json'))
+  return { loadInstalledPlugin, sdkVersion: host(sdk).version,
+    cordisVersion: createRequire(sdk)('@deepseek-ai/cordis/package.json').version,
+    channelProtocolVersion: application.INTERNAL_CHANNEL_PROTOCOL_VERSION }
 }
 
-/** Reuse only a verified installation with a successful provisioning doctor. */
-export async function ensurePinnedInstallation(workspace, root, stage,
-  loadPlugin = loadPinnedPlugin, runtimeArchive) {
-  const lockPath = join(workspace, 'vendor/plugin-core.lock.json')
-  const original = await readFile(lockPath)
-  const lock = JSON.parse(original)
-  async function complete() {
-    try {
-      const marker = await json(join(root, 'provisioned.json'))
-      for (const key of ['archiveSha256', 'pluginVersion', 'sdkVersion']) {
-        if (marker[key] !== lock[key]) throw new Error('Pinned installation marker does not match the current vendor lock.')
-      }
-      const plugin = await loadPlugin(root, workspace)
-      if (marker.doctor !== 'passed') return false
-      try { await plugin.assertRuntimeReady() } catch { return false }
-      return true
-    } catch (error) {
-      if (['ENOENT', 'MODULE_NOT_FOUND', 'ERR_MODULE_NOT_FOUND'].includes(error.code)) return false
-      throw error
-    }
-  }
-  const unchanged = async () => {
-    if (!(await readFile(lockPath)).equals(original)) throw new Error('Release lock changed concurrently.')
-  }
-  // Complete installations can also live under a read-only installation parent.
-  if (await complete()) {
-    await unchanged()
-    console.log(`[deploy] reusing complete pinned installation: ${root}`)
-    return 'reused'
-  }
-  await mkdir(dirname(root), { recursive: true, mode: 0o700 })
-  const guard = `${root}.provisioning`
-  // Never replace an installation while another launcher is supplying it.
-  await mkdir(guard, { mode: 0o700 }).catch(error => {
-    if (error.code === 'EEXIST') throw new Error(`Plugin provisioning already active (or interrupted); inspect ${guard}`)
-    throw error
-  })
-  try {
-    if (await complete()) {
-      await unchanged()
-      console.log(`[deploy] reusing complete pinned installation: ${root}`)
-      return 'reused'
-    }
-    await unchanged()
-    const info = await lstat(root).catch(error => { if (error.code !== 'ENOENT') throw error })
-    if (info) {
-      if (!info.isDirectory() || info.isSymbolicLink()) throw new Error('Refusing to replace a non-directory pinned installation.')
-      const backup = `${root}.incomplete-${randomBytes(8).toString('hex')}`
-      await rename(root, backup)
-      console.log(`[deploy] preserved incomplete installation: ${backup}`)
-    }
-    await stage('04a-provision-plugin-core', workspace, process.execPath,
-      ['tools/provision-plugin-core.mjs', '--target', root,
-        ...(runtimeArchive ? ['--runtime-archive', runtimeArchive] : [])])
-    await unchanged()
-    if (!await complete()) throw new Error('Plugin provisioning did not produce a complete installation with doctor passed.')
-    return 'provisioned'
-  } finally { await rm(guard, { recursive: true, force: true }) }
-}
-
-/** Derive a private development lock and verify it using the real host loader. */
-export async function prepareOverlay(workspace, source, pinnedRoot, output) {
-  const lockPath = join(workspace, 'vendor/plugin-core.lock.json')
-  const original = await readFile(lockPath)
-  const lock = JSON.parse(original)
-  const { loadInstalledPlugin } = await import(pathToFileURL(
-    join(workspace, 'apps/worker/lib/plugin-core/installation.js')).href)
-  await loadInstalledPlugin(pinnedRoot, lockPath)
-  const pinnedPackage = await json(join(pinnedRoot, 'package.json'))
-  // DSH manifest is an overlay; runtime dependencies come from the root manifest.
+/** Snapshot current source assets, with source dependencies/runtime and a private host lock. */
+export async function prepareSource(workspace, source, output, stage,
+  { runtimeArchive, loadHost = sourceHost } = {}) {
   const sourcePackage = await json(join(source, 'package.json'))
-  const pkg = { ...sourcePackage, ...await json(join(source, 'dsh/package.json')),
-    scripts: pinnedPackage.scripts }
-  // Reusing node_modules/runtime is safe only for the identical dependency set.
-  if (sourcePackage.version !== pkg.version || pkg.version !== pinnedPackage.version
-    || JSON.stringify(pkg.dependencies) !== JSON.stringify(pinnedPackage.dependencies)
-    || JSON.stringify(await json(join(source, 'runtime.lock.json')))
-      !== JSON.stringify(await json(join(pinnedRoot, 'runtime.lock.json')))) {
-    throw new Error('Plugin dependencies/version/runtime changed; supply a new pinned release first: '
-      + 'node tools/update-plugin-core.mjs --tgz <new.tgz> --source <plugin-checkout>')
+  const pkg = { ...sourcePackage, ...await json(join(source, 'dsh/package.json')) }
+  if (sourcePackage.version !== pkg.version) throw new Error('Source and DSH manifest versions differ; rebuild consistent source.')
+  await access(join(source, 'node_modules')).catch(() => {
+    throw new Error('Missing source dependencies; rerun with --install.')
+  })
+  const runtime = await json(join(source, 'runtime.lock.json'))
+  const prepared = await json(join(source, '.runtime/runtime.json')).catch(error => {
+    if (error.code !== 'ENOENT') throw error
+    return null
+  })
+  if (!prepared || prepared.version !== runtime.version || prepared.sha256 !== runtime.sha256) {
+    await stage('04a-prepare-source-runtime', source, process.execPath,
+      ['scripts/setup-runtime.mjs', ...(runtimeArchive ? [resolve(runtimeArchive)] : [])])
   }
   const root = join(output, 'plugin')
-  await cp(pinnedRoot, root, { recursive: true })
-  for (const ref of ['dist', 'dsh', 'skills/ggb-construction']) {
-    await rm(join(root, ref), { recursive: true, force: true })
+  await mkdir(root)
+  for (const ref of ['dist', 'dsh', 'skills/ggb-construction', 'viewer', 'runtime.lock.json',
+    'capabilities.json', 'scripts/setup-plugin.mjs', 'scripts/setup-runtime.mjs']) {
     await cp(join(source, ref), join(root, ref), { recursive: true })
   }
   for (const ref of ['index.js', 'cordis.patch.yml', 'locale']) {
-    await rm(join(root, ref), { recursive: true, force: true })
     await cp(join(source, 'dsh', ref), join(root, ref), { recursive: true })
   }
-  for (const ref of ['viewer', 'scripts/setup-plugin.mjs', 'scripts/setup-runtime.mjs', 'capabilities.json']) {
-    await cp(join(source, ref), join(root, ref), { recursive: true })
-  }
   await save(join(root, 'package.json'), pkg)
-  // An old source snapshot must not masquerade as the current source build.
-  await rm(join(root, 'source'), { recursive: true, force: true })
-  for (const ref of Object.keys(lock.files)) {
-    if (ref.startsWith('source/')) delete lock.files[ref]
-    else lock.files[ref] = sha(await readFile(join(root, ref)))
-  }
-  async function fingerprint(dir) {
-    for (const entry of await readdir(join(root, dir), { withFileTypes: true })) {
-      const ref = `${dir}/${entry.name}`
+  // Only executable source assets enter the identity; shared resources are checked separately.
+  const files = {}
+  async function fingerprint(dir = '') {
+    const entries = await readdir(join(root, dir), { withFileTypes: true })
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      const ref = dir ? `${dir}/${entry.name}` : entry.name
       if (entry.isDirectory()) await fingerprint(ref)
-      else if (entry.isFile()) lock.files[ref] = sha(await readFile(join(root, ref)))
-      else throw new Error(`Unexpected plugin link: ${ref}`)
+      else if (entry.isFile()) files[ref] = sha(await readFile(join(root, ref)))
+      else throw new Error(`Unexpected source asset link: ${ref}`)
     }
   }
-  for (const dir of ['dist', 'dsh', 'locale', 'viewer', 'skills/ggb-construction']) await fingerprint(dir)
-  lock.workerSkillSha256 = lock.files['skills/ggb-construction/worker.md']
-  lock.distribution = 'local-source-overlay'
-  lock.sourceDirty = true
-  delete lock.sourceCommit
-  delete lock.sourceSnapshotSha256
-  // Development payload identity, not the digest of the unchanged vendor TGZ.
-  lock.archiveSha256 = sha(JSON.stringify(Object.fromEntries(Object.entries(lock.files).sort())))
+  await fingerprint()
+  await symlink(await realpath(join(source, 'node_modules')), join(root, 'node_modules'), 'dir')
+  await symlink(await realpath(join(source, '.runtime')), join(root, '.runtime'), 'dir')
+  const module = await import(pathToFileURL(join(root, 'dsh/installation.js')).href)
+  const compatibility = await import(pathToFileURL(join(root, 'dist/src/runtime-compatibility.js')).href)
+  const identity = module.loadInstallation()
+  const host = await loadHost(workspace)
+  module.assertDshCompatibility(host.sdkVersion)
+  const lock = { distribution: 'local-source-build', sourceDirty: true,
+    pluginVersion: identity.pluginVersion, archiveSha256: sha(JSON.stringify(files)),
+    sdkVersion: host.sdkVersion, cordisVersion: host.cordisVersion,
+    executorProtocolVersion: identity.executorProtocolVersion,
+    hostProtocolVersion: identity.hostProtocolVersion, receiptSchemaVersion: identity.receiptSchemaVersion,
+    channelProtocolVersion: host.channelProtocolVersion, workerSkillSha256: identity.workerSkillSha256,
+    playwright: identity.runtimeIdentity.playwrightVersion, files,
+    geogebra: { ...runtime, compatibility: compatibility.runtimeCompatibility(runtime.version) } }
   const privateWorkspace = join(output, 'workspace')
-  await mkdir(join(privateWorkspace, 'vendor'), { recursive: true })
   const privateLock = join(privateWorkspace, 'vendor/plugin-core.lock.json')
+  await mkdir(join(privateWorkspace, 'vendor'), { recursive: true })
   await save(privateLock, lock)
-  const installed = await loadInstalledPlugin(root, privateLock)
+  const installed = await host.loadInstalledPlugin(root, privateLock)
   await installed.assertRuntimeReady() // File/dependency checks only; no browser/Provider.
-  if (!(await readFile(lockPath)).equals(original)) throw new Error('Release lock changed concurrently.')
   await save(join(output, 'installation.json'), { distribution: lock.distribution,
-    source: await realpath(source), pinnedRoot, pluginRoot: root,
-    releaseArchiveSha256: JSON.parse(original).archiveSha256,
-    developmentPayloadSha256: lock.archiveSha256,
-    workerSkillSha256: lock.workerSkillSha256, privateLock })
+    source: await realpath(source), pluginRoot: root, pluginVersion: lock.pluginVersion,
+    developmentPayloadSha256: lock.archiveSha256, workerSkillSha256: lock.workerSkillSha256, privateLock })
+  console.log(`[deploy] using source ${lock.pluginVersion}: ${source}`)
   return { root, privateWorkspace }
 }
 
@@ -299,13 +241,12 @@ Local development only. No release publishing, production deployment or model ta
   --build-only     Build and prepare the source installation; do not start servers
   --doctor         Also run plugin doctor (launches real local GeoGebra/browser)
   --plugin PATH    Plugin source (default: $REPO/ggb-plugins)
-  --pinned-root PATH  Complete installation matching the current vendor lock
-  --runtime-archive PATH  Verified GeoGebra ZIP for provisioning without download
+  --runtime-archive PATH  GeoGebra ZIP for preparing the source runtime without download
   --help           Show this help
 REPO defaults to the script's repository. Default UI: http://localhost:5173
-Requires Node/pnpm/lsof, installed dependencies and the Client GeoGebra runtime.
-Missing/incomplete pinned plugin runtime is supplied automatically, including browser doctor.
-Complete verified installations are reused; --doctor additionally checks the source overlay.
+Requires Node/pnpm/lsof and source/host dependencies (or --install).
+Uses current source code, source node_modules and source .runtime; no installed plugin or vendor TGZ.
+Missing/outdated source runtime is prepared automatically; --doctor additionally runs source smoke checks.
 Before building, stops TCP listeners on 8081 and 5173 (bundle: only 8081).
 Sends SIGTERM, waits up to 5s, then SIGKILL if needed. --build-only skips cleanup.
 Logs: $REPO/output/deploy-ggb-dsh/<unique-run>/. Ctrl-C stops all owned processes.
@@ -319,11 +260,6 @@ Enter Provider Key only in page Settings. This script never reads .env or starts
   if (process.env.PORT && process.env.PORT !== '8081') throw new Error('PORT must be 8081 (Vite proxy).')
   const workspace = join(config.repo, 'ggb-dsh')
   const source = config.plugin ?? join(config.repo, 'ggb-plugins')
-  const lock = await json(join(workspace, 'vendor/plugin-core.lock.json'))
-  await readFile(join(workspace, 'apps/client/public/geogebra/deployggb.js')).catch(() => {
-    throw new Error('Missing Client GeoGebra runtime; run pnpm run provision:geogebra in ggb-dsh first.')
-  })
-  const pinned = config.pinnedRoot ?? join(workspace, '.plugin-core-runtime', lock.archiveSha256)
   const parent = join(config.repo, 'output/deploy-ggb-dsh')
   await mkdir(parent, { recursive: true, mode: 0o700 })
   const output = await mkdtemp(join(parent, 'run-'))
@@ -374,14 +310,14 @@ Enter Provider Key only in page Settings. This script never reads .env or starts
     }
     await stage('03-build-plugin', source, 'pnpm', ['build'])
     await stage('04-build-backend', workspace, 'pnpm', ['exec', 'tsc', '-b', 'apps/api', 'apps/worker'])
-    await ensurePinnedInstallation(workspace, pinned, stage, loadPinnedPlugin, config.runtimeArchive)
-    const overlay = await prepareOverlay(workspace, source, pinned, output)
+    const overlay = await prepareSource(workspace, source, output, stage, { runtimeArchive: config.runtimeArchive })
     await stage('04b-provision-client-compatibility', workspace, process.execPath,
-      ['tools/provision-geogebra.mjs', '--plugin-root', overlay.root])
+      ['tools/provision-geogebra.mjs', '--plugin-root', overlay.root,
+        ...(config.runtimeArchive ? ['--runtime-archive', resolve(config.runtimeArchive)] : [])])
     await stage('05-build-client', workspace, 'pnpm', ['exec', 'tsc', '-b', 'apps/client'])
     if (config.bundle) await stage('06-bundle', workspace, 'pnpm', ['--filter', '@ggb-copilot/client', 'run', 'bundle'])
     if (config.doctor) await stage('07-doctor', overlay.root, process.execPath, ['dist/src/cli.js', 'doctor'])
-    console.log(`plugin test root: ${overlay.root}; vendor release lock unchanged`)
+    console.log(`source test root: ${overlay.root}; release files unchanged`)
     if (config.buildOnly) return
     // A new listener may have appeared while building; do not start a partial server set.
     await assertPortFree(8081)
@@ -409,7 +345,7 @@ Enter Provider Key only in page Settings. This script never reads .env or starts
         workspace, env, join(output, 'vite.log')))
       await ready('http://127.0.0.1:5173', servers, processes)
     }
-    console.log(`backend ready on http://127.0.0.1:8081; vendor release lock unchanged\nOpen ${config.bundle ? 'http://127.0.0.1:8081' : 'http://localhost:5173'}; Ctrl-C to stop.`)
+    console.log(`backend ready on http://127.0.0.1:8081; release files unchanged\nOpen ${config.bundle ? 'http://127.0.0.1:8081' : 'http://localhost:5173'}; Ctrl-C to stop.`)
     await save(join(output, 'ready.json'), { api: 'http://127.0.0.1:8081', mode: config.bundle ? 'bundle' : 'vite',
       processes: servers.map(item => ({ pid: item.child.pid, log: item.logPath })) })
     await Promise.race(servers.map(item => item.done))

@@ -49,6 +49,17 @@ test('an existing runtime is prepared, recorded and safely reused', async t => {
   }
 })
 
+for (const state of ['missing', 'invalid']) {
+  test(`explicit source plugin does not depend on a ${state} vendor lock`, async t => {
+    const { directory, args } = await fixture(t)
+    const lock = join(directory, 'vendor/plugin-core.lock.json')
+    if (state === 'missing') await rm(lock)
+    else await writeFile(lock, 'not a release JSON')
+    await run(process.execPath, args)
+    assert.equal(await readFile(join(directory, 'public/geogebra/prepared'), 'utf8'), 'fixed')
+  })
+}
+
 test('incompatible manifests fail before compatibility writes', async t => {
   const { directory, args } = await fixture(t)
   await writeFile(join(directory, 'public/geogebra-runtime-manifest.json'), JSON.stringify({ version: 'other' }))

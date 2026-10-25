@@ -20,7 +20,8 @@ const { values } = parseArgs({ options: {
 const publicRoot = resolve(values['public-root'] ?? join(repositoryRoot, 'apps', 'client', 'public'))
 const targetRoot = join(publicRoot, 'geogebra')
 const manifestPath = join(publicRoot, 'geogebra-runtime-manifest.json')
-const lock = JSON.parse(await readFile(join(repositoryRoot, 'vendor/plugin-core.lock.json'), 'utf8'))
+const lock = values['plugin-root'] ? null
+  : JSON.parse(await readFile(join(repositoryRoot, 'vendor/plugin-core.lock.json'), 'utf8'))
 const pluginRoot = resolve(values['plugin-root'] ?? join(repositoryRoot, '.plugin-core-runtime', lock.archiveSha256))
 const require = createRequire(join(pluginRoot, 'package.json'))
 let compatibilityModule

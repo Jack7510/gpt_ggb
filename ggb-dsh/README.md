@@ -122,7 +122,7 @@ Agent 的修改、验证与安全工作规则见 [AGENTS.md](../AGENTS.md)。
 - **进程日志**：`dev.sh` 在启动时打印日志目录。默认目录是 `.local/logs/<UTC 时间>-<PID>/`，
   包含 `build.log`、`api.log`、`worker.log`；watch 模式还包含 `tsc.log`。
   `GGB_V3_LOG_DIR` 可以指定目录。使用 `tail -f <目录>/worker.log <目录>/api.log` 查看实时输出。
-  仓库根目录的 `tools/deploy-ggb-dsh.sh` 将进程日志写入 `output/deploy-ggb-dsh/<启动批次>/`。
+  仓库根目录的 `tools/deploy-ggb-dsh.sh` 直接使用插件源码构建及源码依赖/runtime，不受已安装插件版本影响；进程日志写入 `output/deploy-ggb-dsh/<启动批次>/`。
 - **数据库**：SQLite 的 `plugin_core_store_snapshot` 单行保存 run、事件和交付快照；
   `dev.sh` 默认使用 `.local/runs.sqlite`，部署工具使用 `.local/deploy/runs.sqlite`。
   PG 使用 `GGB_V3_DATABASE_URL`。旧 `runs`/`run_events` 表不再由当前代码写入。
